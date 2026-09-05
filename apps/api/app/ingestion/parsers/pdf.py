@@ -1,6 +1,6 @@
 from pathlib import Path
 
-import fitz
+import pymupdf
 
 from app.ingestion.parsers.types import ParsedPage
 
@@ -8,7 +8,7 @@ from app.ingestion.parsers.types import ParsedPage
 def parse_pdf(path: Path) -> list[ParsedPage]:
     pages: list[ParsedPage] = []
 
-    with fitz.open(path) as document:
+    with pymupdf.open(path) as document:
         for page_index, page in enumerate(document):
             text = page.get_text("text").strip()
 
