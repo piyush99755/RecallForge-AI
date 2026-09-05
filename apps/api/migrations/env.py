@@ -6,6 +6,7 @@ from sqlalchemy import pool
 
 from app.core.config import get_settings
 from app.db.base import Base
+from app.db.models import Project  # noqa: F401
 
 
 # Alembic configuration object
