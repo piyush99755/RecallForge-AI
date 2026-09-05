@@ -13,6 +13,7 @@ dependencies = [
     "alembic",
     "pgvector",
     "python-multipart",
+    "pymupdf",
 ]
 
 

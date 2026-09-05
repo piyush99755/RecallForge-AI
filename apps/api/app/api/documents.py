@@ -3,7 +3,13 @@ import uuid
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from sqlalchemy import select
 from sqlalchemy.orm import Session
-
+from pathlib import Path
+from app.api.schemas.documents import (
+    ParseDocumentResponse,
+    ParsedPageResponse,
+    UploadDocumentResponse,
+)
+from app.ingestion.parsers.pdf import parse_pdf
 from app.api.schemas.documents import UploadDocumentResponse
 from app.db.models import Document, DocumentVersion, Project
 from app.db.session import get_db
@@ -104,4 +110,54 @@ async def upload_document(
         checksum_sha256=document_version.checksum_sha256,
         processing_status=document_version.processing_status,
         duplicate=False,
+    )
+    
+@router.post(
+    "/versions/{document_version_id}/parse",
+    response_model=ParseDocumentResponse,
+)
+def parse_document_version(
+    document_version_id: uuid.UUID,
+    db: Session = Depends(get_db),
+):
+    document_version = db.get(
+        DocumentVersion,
+        document_version_id,
+    )
+
+    if document_version is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Document version not found",
+        )
+
+    if document_version.mime_type != "application/pdf":
+        raise HTTPException(
+            status_code=400,
+            detail="Only PDF parsing is supported currently",
+        )
+
+    path = Path(document_version.storage_key)
+
+    if not path.exists():
+        raise HTTPException(
+            status_code=404,
+            detail="Stored file not found",
+        )
+
+    pages = parse_pdf(path)
+
+    return ParseDocumentResponse(
+        document_version_id=document_version.id,
+        filename=document_version.original_filename,
+        page_count=len(pages),
+        total_characters=sum(len(page.text) for page in pages),
+        pages=[
+            ParsedPageResponse(
+                page_number=page.page_number,
+                character_count=len(page.text),
+                preview=page.text[:300],
+            )
+            for page in pages
+        ],
     )
