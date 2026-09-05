@@ -87,3 +87,9 @@ class DocumentVersion(Base):
         "Document",
         back_populates="versions",
     )
+    
+    sections = relationship(
+        "Section",
+        back_populates="document_version",
+        cascade="all, delete-orphan",
+    )
