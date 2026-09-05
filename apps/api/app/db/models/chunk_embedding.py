@@ -66,3 +66,8 @@ class ChunkEmbedding(Base):
         server_default=func.now(),
         nullable=False,
     )
+    
+    chunk = relationship(
+        "Chunk",
+        back_populates="embeddings",
+    )
