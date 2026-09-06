@@ -15,6 +15,9 @@ from app.db.models import Document, DocumentVersion, Project
 from app.db.session import get_db
 from app.ingestion.checksum import calculate_sha256
 from app.ingestion.storage import build_storage_path, save_file
+from app.api.schemas.documents import IngestDocumentResponse
+from app.ingestion.persist import persist_sections_and_chunks
+from app.ingestion.structure.sections import build_sections
 
 
 router = APIRouter(
@@ -160,4 +163,66 @@ def parse_document_version(
             )
             for page in pages
         ],
+    )
+    
+@router.post(
+    "/versions/{document_version_id}/ingest",
+    response_model=IngestDocumentResponse,
+)
+def ingest_document_version(
+    document_version_id: uuid.UUID,
+    db: Session = Depends(get_db),
+):
+    document_version = db.get(
+        DocumentVersion,
+        document_version_id,
+    )
+
+    if document_version is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Document version not found",
+        )
+
+    if document_version.mime_type != "application/pdf":
+        raise HTTPException(
+            status_code=400,
+            detail="Only PDF ingestion is supported currently",
+        )
+
+    path = Path(document_version.storage_key)
+
+    if not path.exists():
+        raise HTTPException(
+            status_code=404,
+            detail="Stored file not found",
+        )
+
+    document_version.processing_status = "processing"
+    db.commit()
+
+    try:
+        pages = parse_pdf(path)
+        parsed_sections = build_sections(pages)
+
+        section_count, chunk_count = persist_sections_and_chunks(
+            db=db,
+            document_version=document_version,
+            parsed_sections=parsed_sections,
+        )
+
+    except Exception:
+        db.rollback()
+
+        document_version.processing_status = "failed"
+        db.commit()
+
+        raise
+
+    return IngestDocumentResponse(
+        document_version_id=document_version.id,
+        filename=document_version.original_filename,
+        processing_status=document_version.processing_status,
+        section_count=section_count,
+        chunk_count=chunk_count,
     )

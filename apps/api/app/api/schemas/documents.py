@@ -24,3 +24,10 @@ class ParseDocumentResponse(BaseModel):
     page_count: int
     total_characters: int
     pages: list[ParsedPageResponse]
+    
+class IngestDocumentResponse(BaseModel):
+    document_version_id: UUID
+    filename: str
+    processing_status: str
+    section_count: int
+    chunk_count: int
