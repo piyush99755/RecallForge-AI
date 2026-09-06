@@ -231,6 +231,7 @@ def ingest_document_version(
 @router.post("/versions/{document_version_id}/embed")
 def embed_document_version_endpoint(
     document_version_id: uuid.UUID,
+    force: bool = False,
     db: Session = Depends(get_db),
 ):
     document_version = db.get(
@@ -251,6 +252,7 @@ def embed_document_version_endpoint(
         embedded_count, total_chunks = embed_document_version(
             db=db,
             document_version=document_version,
+            force=force,
         )
 
     except Exception:
@@ -266,4 +268,5 @@ def embed_document_version_endpoint(
         "processing_status": document_version.processing_status,
         "embedded_count": embedded_count,
         "total_chunks": total_chunks,
+        "force": force,
     }
