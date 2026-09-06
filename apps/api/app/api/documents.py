@@ -18,6 +18,7 @@ from app.ingestion.storage import build_storage_path, save_file
 from app.api.schemas.documents import IngestDocumentResponse
 from app.ingestion.persist import persist_sections_and_chunks
 from app.ingestion.structure.sections import build_sections
+from app.ai.embeddings.service import embed_document_version
 
 
 router = APIRouter(
@@ -226,3 +227,43 @@ def ingest_document_version(
         section_count=section_count,
         chunk_count=chunk_count,
     )
+    
+@router.post("/versions/{document_version_id}/embed")
+def embed_document_version_endpoint(
+    document_version_id: uuid.UUID,
+    db: Session = Depends(get_db),
+):
+    document_version = db.get(
+        DocumentVersion,
+        document_version_id,
+    )
+
+    if document_version is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Document version not found",
+        )
+
+    try:
+        document_version.processing_status = "embedding"
+        db.commit()
+
+        embedded_count, total_chunks = embed_document_version(
+            db=db,
+            document_version=document_version,
+        )
+
+    except Exception:
+        db.rollback()
+
+        document_version.processing_status = "embedding_failed"
+        db.commit()
+
+        raise
+
+    return {
+        "document_version_id": str(document_version.id),
+        "processing_status": document_version.processing_status,
+        "embedded_count": embedded_count,
+        "total_chunks": total_chunks,
+    }

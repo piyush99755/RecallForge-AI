@@ -8,6 +8,8 @@ class Settings(BaseSettings):
     app_env: str = "development"
     debug: bool = True
     database_url: str
+    gemini_api_key: str
+    embedding_model: str = "gemini-embedding-001"
 
     model_config = SettingsConfigDict(
         env_file=".env",
