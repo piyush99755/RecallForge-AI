@@ -23,7 +23,9 @@ class SemanticSearchResult:
     page_start: int | None
     page_end: int | None
     document_title: str
+    document_id: UUID
     document_version_id: UUID
+    project_id: UUID
     distance: float
 
 
@@ -31,6 +33,8 @@ def semantic_search(
     db: Session,
     query: str,
     limit: int = 5,
+    project_id: UUID | None = None,
+    document_id: UUID | None = None,
 ) -> list[SemanticSearchResult]:
     provider = GeminiEmbeddingProvider()
 
@@ -40,7 +44,7 @@ def semantic_search(
         query_vector
     )
 
-    rows = db.execute(
+    statement = (
         select(
             Chunk,
             Section,
@@ -68,9 +72,25 @@ def semantic_search(
             ChunkEmbedding.provider == "gemini",
             ChunkEmbedding.model == provider.model,
         )
+    )
+
+    if project_id is not None:
+        statement = statement.where(
+            Document.project_id == project_id
+        )
+
+    if document_id is not None:
+        statement = statement.where(
+            Document.id == document_id
+        )
+
+    statement = (
+        statement
         .order_by(distance)
         .limit(limit)
-    ).all()
+    )
+
+    rows = db.execute(statement).all()
 
     return [
         SemanticSearchResult(
@@ -81,7 +101,9 @@ def semantic_search(
             page_start=chunk.page_start,
             page_end=chunk.page_end,
             document_title=document.title,
+            document_id=document.id,
             document_version_id=document_version.id,
+            project_id=document.project_id,
             distance=float(distance_value),
         )
         for (

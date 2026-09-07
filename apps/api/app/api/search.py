@@ -4,6 +4,8 @@ from fastapi import APIRouter, Depends
 
 from app.db.session import get_db
 from app.retrieval.semantic import semantic_search
+from uuid import UUID
+
 
 
 router = APIRouter(
@@ -15,6 +17,8 @@ router = APIRouter(
 class SemanticSearchRequest(BaseModel):
     query: str = Field(min_length=1)
     limit: int = Field(default=5, ge=1, le=20)
+    project_id: UUID | None = None
+    document_id: UUID | None = None
 
 
 class SemanticSearchResultResponse(BaseModel):
@@ -25,9 +29,10 @@ class SemanticSearchResultResponse(BaseModel):
     page_start: int | None
     page_end: int | None
     document_title: str
+    document_id: str
     document_version_id: str
+    project_id: str
     distance: float
-
 
 class SemanticSearchResponse(BaseModel):
     query: str
@@ -46,6 +51,8 @@ def search_semantic(
         db=db,
         query=payload.query,
         limit=payload.limit,
+        project_id=payload.project_id,
+        document_id=payload.document_id,
     )
 
     return SemanticSearchResponse(
@@ -59,7 +66,9 @@ def search_semantic(
                 page_start=result.page_start,
                 page_end=result.page_end,
                 document_title=result.document_title,
+                document_id=str(result.document_id),
                 document_version_id=str(result.document_version_id),
+                project_id=str(result.project_id),
                 distance=result.distance,
             )
             for result in results
