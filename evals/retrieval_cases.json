@@ -1,0 +1,42 @@
+[
+  {
+    "name": "python_dictionary_complexity",
+    "query": "Why are Python dictionaries fast?",
+    "expected_contains": "Why is dictionary lookup average O(1)?"
+  },
+  {
+    "name": "python_slots",
+    "query": "What is __slots__ used for?",
+    "expected_contains": "What is __slots__?"
+  },
+  {
+    "name": "python_gil",
+    "query": "Why can Python threads struggle with CPU-bound work?",
+    "expected_contains": "What is the GIL?"
+  },
+  {
+    "name": "hash_map_complexity",
+    "query": "Why is hash map lookup usually constant time?",
+    "expected_contains": "Why is hash-map lookup average O(1)?"
+  },
+  {
+    "name": "redis_use_cases",
+    "query": "What can Redis be used for?",
+    "expected_contains": "What is Redis useful for?"
+  },
+  {
+    "name": "database_index",
+    "query": "How does a database avoid scanning every row?",
+    "expected_contains": "What is an index?"
+  },
+  {
+    "name": "mutable_defaults",
+    "query": "Why should I avoid using a list as a Python default argument?",
+    "expected_contains": "Why are mutable default arguments dangerous?"
+  },
+  {
+    "name": "closures",
+    "query": "How can a Python function retain variables from an enclosing scope?",
+    "expected_contains": "What is a closure?"
+  }
+]
