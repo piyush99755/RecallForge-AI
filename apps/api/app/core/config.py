@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     database_url: str
     gemini_api_key: str
     embedding_model: str = "gemini-embedding-001"
+    reranker_model: str = "gemini-3.6-flash"
 
     model_config = SettingsConfigDict(
         env_file=".env",
