@@ -10,6 +10,7 @@ from app.rag.context import build_rag_context
 from app.retrieval.hybrid import hybrid_search
 from app.retrieval.reranker import rerank_results
 from app.retrieval.confidence import evaluate_retrieval_confidence
+from app.rag.modes import StudyMode
 
 
 router = APIRouter(
@@ -22,6 +23,7 @@ class AskRequest(BaseModel):
     query: str = Field(min_length=1)
     project_id: UUID | None = None
     document_id: UUID | None = None
+    mode: StudyMode = StudyMode.beginner
     candidate_limit: int = Field(default=10, ge=5, le=20)
     source_limit: int = Field(default=3, ge=1, le=10)
 
@@ -84,6 +86,7 @@ def ask_recallforge(
     grounded_answer = generate_grounded_answer(
         question=payload.query,
         context=context,
+        mode=payload.mode,
     )
     
     citation_groups = re.findall(
