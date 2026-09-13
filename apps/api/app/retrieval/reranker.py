@@ -25,6 +25,7 @@ class RerankedSearchResult:
     semantic_rank: int | None
     lexical_rank: int | None
     rerank_score: float
+    semantic_distance: float | None
 
 
 def rerank_results(
@@ -136,6 +137,7 @@ Candidates:
                 semantic_rank=candidate.semantic_rank,
                 lexical_rank=candidate.lexical_rank,
                 rerank_score=score_by_index.get(index, 0.0),
+                semantic_distance=candidate.semantic_distance,
             )
         )
 

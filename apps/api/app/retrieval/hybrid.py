@@ -24,6 +24,7 @@ class HybridSearchResult:
     hybrid_score: float
     semantic_rank: int | None
     lexical_rank: int | None
+    semantic_distance: float | None
 
 
 def hybrid_search(
@@ -58,12 +59,13 @@ def hybrid_search(
         start=1,
     ):
         combined[result.chunk_id] = {
-            "result": result,
-            "semantic_rank": rank,
-            "lexical_rank": None,
-            "score": 1 / (rrf_k + rank),
-        }
-
+        "result": result,
+        "semantic_rank": rank,
+        "lexical_rank": None,
+        "semantic_distance": result.distance,
+        "score": 1 / (rrf_k + rank),
+    }
+        
     for rank, result in enumerate(
         lexical_results,
         start=1,
@@ -72,6 +74,7 @@ def hybrid_search(
             combined[result.chunk_id] = {
                 "result": result,
                 "semantic_rank": None,
+                "semantic_distance": None,
                 "lexical_rank": rank,
                 "score": 0.0,
             }
@@ -107,6 +110,7 @@ def hybrid_search(
                 hybrid_score=item["score"],
                 semantic_rank=item["semantic_rank"],
                 lexical_rank=item["lexical_rank"],
+                semantic_distance=item["semantic_distance"],
             )
         )
 

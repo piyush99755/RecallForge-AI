@@ -9,6 +9,7 @@ from app.rag.answer import generate_grounded_answer
 from app.rag.context import build_rag_context
 from app.retrieval.hybrid import hybrid_search
 from app.retrieval.reranker import rerank_results
+from app.retrieval.confidence import evaluate_retrieval_confidence
 
 
 router = APIRouter(
@@ -55,6 +56,20 @@ def ask_recallforge(
         project_id=payload.project_id,
         document_id=payload.document_id,
     )
+    
+    confidence = evaluate_retrieval_confidence(
+        candidates
+    )
+
+    if not confidence.sufficient:
+        return AskResponse(
+            query=payload.query,
+            answer=(
+                "I couldn't find sufficiently relevant information "
+                "in the available RecallForge sources to answer this question."
+            ),
+            sources=[],
+        )
 
     reranked = rerank_results(
         query=payload.query,
@@ -71,12 +86,17 @@ def ask_recallforge(
         context=context,
     )
     
-    cited_source_ids = set(
-        re.findall(
-            r"\[(S\d+)\]",
-            grounded_answer.answer,
-        )
+    citation_groups = re.findall(
+        r"\[([^\]]+)\]",
+        grounded_answer.answer,
     )
+
+    cited_source_ids = {
+        source_id.strip()
+        for group in citation_groups
+        for source_id in group.split(",")
+        if re.fullmatch(r"S\d+", source_id.strip())
+    }
 
     return AskResponse(
         query=payload.query,
