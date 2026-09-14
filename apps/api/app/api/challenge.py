@@ -1,9 +1,8 @@
 from uuid import UUID
-
-from fastapi import APIRouter, Depends
+import json
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
-
 from app.db.session import get_db
 from app.rag.challenge import generate_challenge_question
 from app.rag.context import build_rag_context
@@ -11,6 +10,11 @@ from app.retrieval.confidence import evaluate_retrieval_confidence
 from app.retrieval.hybrid import hybrid_search
 from app.retrieval.reranker import rerank_results
 from app.rag.challenge_evaluator import evaluate_challenge_answer
+from app.db.models import StudyChallenge
+from app.db.models import (
+    ChallengeAttempt,
+    StudyChallenge,
+)
 
 
 router = APIRouter(
@@ -42,10 +46,8 @@ class ChallengeResponse(BaseModel):
     sources: list[ChallengeSourceResponse]
     
 class ChallengeEvaluationRequest(BaseModel):
-    question: str = Field(min_length=1)
-    expected_answer: str = Field(min_length=1)
+    challenge_id: UUID
     user_answer: str = Field(min_length=1)
-    explanation: str | None = None
 
 
 class ChallengeEvaluationResponse(BaseModel):
@@ -55,6 +57,12 @@ class ChallengeEvaluationResponse(BaseModel):
     missing_points: list[str]
     expected_answer: str
     explanation: str | None
+    
+class ChallengeResponse(BaseModel):
+    challenge_id: UUID
+    topic: str
+    question: str
+    sources: list[ChallengeSourceResponse]
 
 
 @router.post(
@@ -100,22 +108,36 @@ def create_challenge(
     challenge = generate_challenge_question(
         context=context
     )
-
-    return ChallengeResponse(
+    
+    stored_challenge = StudyChallenge(
+        project_id=payload.project_id,
+        document_id=payload.document_id,
         topic=payload.topic,
         question=challenge.question,
-        sources=[
-            ChallengeSourceResponse(
-                source_id=source.source_id,
-                chunk_id=source.chunk_id,
-                document_title=source.document_title,
-                section_title=source.section_title,
-                page_start=source.page_start,
-                page_end=source.page_end,
-            )
-            for source in context.sources
-        ],
+        expected_answer=challenge.expected_answer,
+        explanation=challenge.explanation,
     )
+
+    db.add(stored_challenge)
+    db.commit()
+    db.refresh(stored_challenge)
+
+    return ChallengeResponse(
+    challenge_id=stored_challenge.id,
+    topic=payload.topic,
+    question=challenge.question,
+    sources=[
+        ChallengeSourceResponse(
+            source_id=source.source_id,
+            chunk_id=source.chunk_id,
+            document_title=source.document_title,
+            section_title=source.section_title,
+            page_start=source.page_start,
+            page_end=source.page_end,
+        )
+        for source in context.sources
+    ],
+)
     
 @router.post(
     "/evaluate",
@@ -123,18 +145,44 @@ def create_challenge(
 )
 def evaluate_challenge(
     payload: ChallengeEvaluationRequest,
+    db: Session = Depends(get_db),
 ):
+    challenge = db.get(
+        StudyChallenge,
+        payload.challenge_id,
+    )
+
+    if challenge is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Challenge not found",
+        )
+
     evaluation = evaluate_challenge_answer(
-        question=payload.question,
-        expected_answer=payload.expected_answer,
+        question=challenge.question,
+        expected_answer=challenge.expected_answer,
         user_answer=payload.user_answer,
     )
+
+    attempt = ChallengeAttempt(
+        challenge_id=challenge.id,
+        user_answer=payload.user_answer,
+        score=evaluation.score,
+        correct=evaluation.correct,
+        feedback=evaluation.feedback,
+        missing_points=json.dumps(
+            evaluation.missing_points
+        ),
+    )
+
+    db.add(attempt)
+    db.commit()
 
     return ChallengeEvaluationResponse(
         score=evaluation.score,
         correct=evaluation.correct,
         feedback=evaluation.feedback,
         missing_points=evaluation.missing_points,
-        expected_answer=payload.expected_answer,
-        explanation=payload.explanation,
+        expected_answer=challenge.expected_answer,
+        explanation=challenge.explanation,
     )
