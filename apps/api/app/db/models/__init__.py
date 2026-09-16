@@ -6,6 +6,7 @@ from app.db.models.chunk import Chunk
 from app.db.models.chunk_embedding import ChunkEmbedding
 from app.db.models.study_challenge import StudyChallenge
 from app.db.models.challenge_attempt import ChallengeAttempt
+from app.db.models.concept_progress import ConceptProgress
 
 __all__ = [
     "Project",
@@ -14,5 +15,8 @@ __all__ = [
     "Section",
     "Chunk",
     "ChunkEmbedding",
+    "StudyChallenge",
+    "ChallengeAttempt",
+    "ConceptProgress",
     
 ]

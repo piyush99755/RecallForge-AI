@@ -35,6 +35,12 @@ class StudyChallenge(Base):
         nullable=False,
     )
 
+    concept: Mapped[str] = mapped_column(
+        String(255),
+        nullable=False,
+        index=True,
+    )
+
     question: Mapped[str] = mapped_column(
         Text,
         nullable=False,
