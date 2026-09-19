@@ -96,3 +96,8 @@ class ConceptProgress(Base):
         onupdate=lambda: datetime.now(timezone.utc),
         nullable=False,
     )
+    
+    next_review_at: Mapped[datetime | None] = mapped_column(
+    DateTime(timezone=True),
+    nullable=True,
+)

@@ -1,9 +1,10 @@
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db.models import ConceptProgress, StudyChallenge
+
 
 
 def calculate_mastery_level(
@@ -69,9 +70,38 @@ def update_concept_progress(
         attempts=progress.attempts,
         average_score=progress.average_score,
     )
+    
+    progress.next_review_at = calculate_next_review_at(
+    mastery_level=progress.mastery_level,
+    correct=correct,
+)
 
     progress.last_practiced_at = datetime.now(
         timezone.utc
     )
 
     return progress
+
+
+def calculate_next_review_at(
+    mastery_level: str,
+    correct: bool,
+) -> datetime:
+    now = datetime.now(timezone.utc)
+
+    if not correct:
+        return now + timedelta(days=1)
+
+    if mastery_level == "weak":
+        return now + timedelta(days=1)
+
+    if mastery_level == "developing":
+        return now + timedelta(days=3)
+
+    if mastery_level == "strong":
+        return now + timedelta(days=7)
+
+    if mastery_level == "mastered":
+        return now + timedelta(days=21)
+
+    return now + timedelta(days=1)
