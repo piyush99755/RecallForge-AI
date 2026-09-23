@@ -84,6 +84,32 @@ class KnowledgeGapItem(BaseModel):
 class KnowledgeGapResponse(BaseModel):
     total_gaps: int
     items: list[KnowledgeGapItem]
+    
+
+class ReviewQueueGap(BaseModel):
+    gap_key: str
+    display_name: str
+    occurrences: int
+
+
+class ReviewQueueItem(BaseModel):
+    project_id: UUID | None
+    document_id: UUID | None
+    topic: str
+    concept: str
+    attempts: int
+    average_score: float
+    mastery_level: str
+    next_review_at: datetime | None
+    review_status: str
+    priority_score: float
+    reason: str
+    top_gap: ReviewQueueGap | None = None
+
+
+class ReviewQueueResponse(BaseModel):
+    total_items: int
+    items: list[ReviewQueueItem]
 
 
 def calculate_review_priority(row: ConceptProgress) -> float:
@@ -258,6 +284,107 @@ def get_learning_progress(
         summary=summary,
         recommended_next_concepts=recommended_next_concepts,
         items=items,
+    )
+    
+@router.get(
+    "/review-queue",
+    response_model=ReviewQueueResponse,
+)
+def get_review_queue(
+    project_id: UUID | None = Query(default=None),
+    document_id: UUID | None = Query(default=None),
+    db: Session = Depends(get_db),
+) -> ReviewQueueResponse:
+    statement = select(ConceptProgress).where(
+        ConceptProgress.concept != "legacy"
+    )
+
+    if project_id is not None:
+        statement = statement.where(
+            ConceptProgress.project_id == project_id
+        )
+
+    if document_id is not None:
+        statement = statement.where(
+            ConceptProgress.document_id == document_id
+        )
+
+    rows = db.scalars(statement).all()
+
+    queue_items: list[ReviewQueueItem] = []
+
+    for row in rows:
+        priority_score = calculate_review_priority(row)
+        review_status = get_review_status(row)
+        reason = build_review_reason(row)
+        
+        gap_count = func.count(
+            ChallengeAttemptGap.id
+        ).label("occurrences")
+
+        gap_statement = (
+            select(
+                KnowledgeGap,
+                gap_count,
+            )
+            .join(
+                ChallengeAttemptGap,
+                ChallengeAttemptGap.knowledge_gap_id
+                == KnowledgeGap.id,
+            )
+            .where(
+                KnowledgeGap.concept == row.concept,
+                KnowledgeGap.project_id == row.project_id,
+                KnowledgeGap.document_id == row.document_id,
+            )
+            .group_by(
+                KnowledgeGap.id
+            )
+            .order_by(
+                gap_count.desc()
+            )
+        )
+
+        gap_row = db.execute(
+            gap_statement
+        ).first()
+        
+        top_gap = None
+
+        if gap_row is not None:
+            knowledge_gap = gap_row[0]
+            occurrences = gap_row[1]
+
+            top_gap = ReviewQueueGap(
+                gap_key=knowledge_gap.gap_key,
+                display_name=knowledge_gap.display_name,
+                occurrences=occurrences,
+            )
+            
+        queue_items.append(
+    ReviewQueueItem(
+                project_id=row.project_id,
+                document_id=row.document_id,
+                topic=row.topic,
+                concept=row.concept,
+                attempts=row.attempts,
+                average_score=row.average_score,
+                mastery_level=row.mastery_level,
+                next_review_at=row.next_review_at,
+                review_status=review_status,
+                priority_score=priority_score,
+                reason=reason,
+                top_gap=top_gap,
+            )
+        )
+    queue_items.sort(
+        key=lambda item: item.priority_score,
+        reverse=True,
+    )
+
+    return ReviewQueueResponse(
+        total_items=len(queue_items),
+        items=queue_items,
     )
 
 
