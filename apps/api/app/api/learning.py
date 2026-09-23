@@ -1,13 +1,11 @@
+from datetime import datetime, timezone
 from uuid import UUID
-import json
-from fastapi import APIRouter, Depends, Query, HTTPException
+
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-
-from app.db.session import get_db
-from datetime import datetime, timezone
 from app.api.challenge import (
     ChallengeResponse,
     ChallengeSourceResponse,
@@ -19,18 +17,18 @@ from app.db.models import (
     KnowledgeGap,
     StudyChallenge,
 )
+from app.db.session import get_db
 from app.rag.challenge import generate_challenge_question
 from app.rag.context import build_rag_context
 from app.retrieval.confidence import evaluate_retrieval_confidence
 from app.retrieval.hybrid import hybrid_search
 from app.retrieval.reranker import rerank_results
-from app.db.models import ConceptProgress, StudyChallenge
-
 
 router = APIRouter(
     prefix="/learning",
     tags=["learning"],
 )
+
 
 class LearningProgressSummary(BaseModel):
     total_concepts: int
@@ -49,6 +47,7 @@ class RecommendedConcept(BaseModel):
     priority_score: float
     reason: str
 
+
 class LearningProgressItem(BaseModel):
     topic: str
     concept: str
@@ -60,16 +59,19 @@ class LearningProgressItem(BaseModel):
     mastery_level: str
     next_review_at: datetime | None
     review_status: str
-    
+
+
 class LearningProgressResponse(BaseModel):
     summary: LearningProgressSummary
     recommended_next_concepts: list[RecommendedConcept]
     items: list[LearningProgressItem]
-    
+
+
 class ReviewNextRequest(BaseModel):
     project_id: UUID | None = None
     document_id: UUID | None = None
-    
+
+
 class KnowledgeGapItem(BaseModel):
     concept: str
     topic: str
@@ -98,7 +100,6 @@ def calculate_review_priority(row: ConceptProgress) -> float:
     )
 
     score_gap = 1.0 - row.average_score
-
     attempt_factor = 1.0 / max(row.attempts, 1)
 
     now = datetime.now(timezone.utc)
@@ -106,14 +107,8 @@ def calculate_review_priority(row: ConceptProgress) -> float:
     if row.next_review_at is None:
         due_factor = 0.5
     elif row.next_review_at <= now:
-        overdue_days = (
-            now - row.next_review_at
-        ).total_seconds() / 86400
-
-        due_factor = min(
-            1.0 + (overdue_days / 30.0),
-            1.5,
-        )
+        overdue_days = (now - row.next_review_at).total_seconds() / 86400
+        due_factor = min(1.0 + (overdue_days / 30.0), 1.5)
     else:
         due_factor = 0.0
 
@@ -123,14 +118,12 @@ def calculate_review_priority(row: ConceptProgress) -> float:
         + attempt_factor * 0.15
         + due_factor * 0.25
     )
-    
+
+
 def build_review_reason(row: ConceptProgress) -> str:
     now = datetime.now(timezone.utc)
 
-    if (
-        row.next_review_at is not None
-        and row.next_review_at <= now
-    ):
+    if row.next_review_at is not None and row.next_review_at <= now:
         return (
             "This concept is due for review based on your "
             "spaced-repetition schedule."
@@ -138,44 +131,37 @@ def build_review_reason(row: ConceptProgress) -> str:
 
     if row.mastery_level == "weak":
         return (
-            "This concept has a low mastery level and should "
-            "be reviewed soon."
+            "This concept has a low mastery level and should be reviewed soon."
         )
 
     if row.mastery_level == "developing":
-        return (
-            "This concept is improving but still needs more practice."
-        )
+        return "This concept is improving but still needs more practice."
 
     if row.attempts <= 1:
         return (
-            "Only practiced once; more repetition is needed "
-            "to confirm retention."
+            "Only practiced once; more repetition is needed to confirm retention."
         )
 
     if row.attempts == 2:
         return (
-            "Practiced only a few times; another review would "
-            "help confirm retention."
+            "Practiced only a few times; another review would help confirm retention."
         )
 
     if row.mastery_level == "strong":
         return (
-            "Strong performance so far; periodic review can "
-            "help maintain retention."
+            "Strong performance so far; periodic review can help maintain retention."
         )
 
     if row.mastery_level == "mastered":
         return (
-            "This concept is mastered; review it periodically "
-            "to maintain long-term retention."
+            "This concept is mastered; review it periodically to maintain long-term retention."
         )
 
     return (
-        "This concept is recommended for review based on "
-        "your learning history."
+        "This concept is recommended for review based on your learning history."
     )
-    
+
+
 def get_review_status(row: ConceptProgress) -> str:
     if row.next_review_at is None:
         return "not_scheduled"
@@ -189,7 +175,92 @@ def get_review_status(row: ConceptProgress) -> str:
         return "due_now"
 
     return "scheduled"
-        
+
+
+@router.get(
+    "/progress",
+    response_model=LearningProgressResponse,
+)
+def get_learning_progress(
+    project_id: UUID | None = Query(default=None),
+    document_id: UUID | None = Query(default=None),
+    db: Session = Depends(get_db),
+) -> LearningProgressResponse:
+    statement = select(ConceptProgress)
+
+    if project_id is not None:
+        statement = statement.where(ConceptProgress.project_id == project_id)
+
+    if document_id is not None:
+        statement = statement.where(ConceptProgress.document_id == document_id)
+
+    statement = statement.order_by(
+        ConceptProgress.average_score.asc(),
+        ConceptProgress.attempts.desc(),
+    )
+
+    rows = db.scalars(statement).all()
+
+    real_rows = [row for row in rows if row.concept != "legacy"]
+
+    summary = LearningProgressSummary(
+        total_concepts=len(real_rows),
+        weak_count=sum(
+            1 for row in real_rows if row.mastery_level == "weak"
+        ),
+        developing_count=sum(
+            1 for row in real_rows if row.mastery_level == "developing"
+        ),
+        strong_count=sum(
+            1 for row in real_rows if row.mastery_level == "strong"
+        ),
+        mastered_count=sum(
+            1 for row in real_rows if row.mastery_level == "mastered"
+        ),
+    )
+
+    ranked_rows = sorted(
+        real_rows,
+        key=calculate_review_priority,
+        reverse=True,
+    )
+
+    recommended_next_concepts = [
+        RecommendedConcept(
+            topic=row.topic,
+            concept=row.concept,
+            average_score=row.average_score,
+            mastery_level=row.mastery_level,
+            attempts=row.attempts,
+            priority_score=round(calculate_review_priority(row), 3),
+            reason=build_review_reason(row),
+        )
+        for row in ranked_rows[:5]
+    ]
+
+    items = [
+        LearningProgressItem(
+            topic=row.topic,
+            concept=row.concept,
+            attempts=row.attempts,
+            average_score=row.average_score,
+            last_score=row.last_score,
+            correct_count=row.correct_count,
+            incorrect_count=row.incorrect_count,
+            mastery_level=row.mastery_level,
+            next_review_at=row.next_review_at,
+            review_status=get_review_status(row),
+        )
+        for row in real_rows
+    ]
+
+    return LearningProgressResponse(
+        summary=summary,
+        recommended_next_concepts=recommended_next_concepts,
+        items=items,
+    )
+
+
 @router.get(
     "/gaps",
     response_model=KnowledgeGapResponse,
@@ -199,9 +270,7 @@ def get_learning_gaps(
     document_id: UUID | None = Query(default=None),
     db: Session = Depends(get_db),
 ) -> KnowledgeGapResponse:
-    occurrence_count = func.count(
-        ChallengeAttemptGap.id
-    ).label("occurrences")
+    occurrence_count = func.count(ChallengeAttemptGap.id).label("occurrences")
 
     statement = (
         select(
@@ -214,47 +283,34 @@ def get_learning_gaps(
         )
         .join(
             ChallengeAttemptGap,
-            ChallengeAttemptGap.knowledge_gap_id
-            == KnowledgeGap.id,
+            ChallengeAttemptGap.knowledge_gap_id == KnowledgeGap.id,
         )
         .join(
             ChallengeAttempt,
-            ChallengeAttempt.id
-            == ChallengeAttemptGap.attempt_id,
+            ChallengeAttempt.id == ChallengeAttemptGap.attempt_id,
         )
         .join(
             StudyChallenge,
-            StudyChallenge.id
-            == ChallengeAttempt.challenge_id,
+            StudyChallenge.id == ChallengeAttempt.challenge_id,
         )
-        .where(
-            StudyChallenge.concept != "legacy"
-        )
+        .where(StudyChallenge.concept != "legacy")
     )
 
     if project_id is not None:
-        statement = statement.where(
-            KnowledgeGap.project_id == project_id
-        )
+        statement = statement.where(KnowledgeGap.project_id == project_id)
 
     if document_id is not None:
-        statement = statement.where(
-            KnowledgeGap.document_id == document_id
-        )
+        statement = statement.where(KnowledgeGap.document_id == document_id)
 
     statement = (
-        statement
-        .group_by(
+        statement.group_by(
             KnowledgeGap.id,
             KnowledgeGap.concept,
             StudyChallenge.topic,
             KnowledgeGap.gap_key,
             KnowledgeGap.display_name,
             KnowledgeGap.description,
-        )
-        .order_by(
-            occurrence_count.desc()
-        )
+        ).order_by(occurrence_count.desc())
     )
 
     rows = db.execute(statement).all()
@@ -275,7 +331,8 @@ def get_learning_gaps(
         total_gaps=len(items),
         items=items,
     )
-    
+
+
 @router.post(
     "/review-next",
     response_model=ChallengeResponse,
@@ -314,6 +371,51 @@ def review_next_concept(
 
     target = ranked_rows[0]
 
+    target_gap = None
+    target_gap_description = None
+
+    occurrence_count = func.count(ChallengeAttemptGap.id).label("occurrences")
+    gap_statement = (
+        select(
+            KnowledgeGap.gap_key,
+            KnowledgeGap.description,
+            occurrence_count,
+        )
+        .join(
+            ChallengeAttemptGap,
+            ChallengeAttemptGap.knowledge_gap_id == KnowledgeGap.id,
+        )
+        .where(
+            KnowledgeGap.concept == target.concept,
+        )
+    )
+
+    if target.project_id is not None:
+        gap_statement = gap_statement.where(
+            KnowledgeGap.project_id == target.project_id
+        )
+
+    if target.document_id is not None:
+        gap_statement = gap_statement.where(
+            KnowledgeGap.document_id == target.document_id
+        )
+
+    gap_statement = (
+        gap_statement.group_by(
+            KnowledgeGap.id,
+            KnowledgeGap.gap_key,
+            KnowledgeGap.description,
+        )
+        .order_by(occurrence_count.desc())
+        .limit(1)
+    )
+
+    top_gap_row = db.execute(gap_statement).first()
+
+    if top_gap_row is not None:
+        target_gap = top_gap_row.gap_key
+        target_gap_description = top_gap_row.description
+
     query = target.concept.replace("_", " ")
 
     candidates = hybrid_search(
@@ -324,9 +426,7 @@ def review_next_concept(
         document_id=target.document_id,
     )
 
-    confidence = evaluate_retrieval_confidence(
-        candidates
-    )
+    confidence = evaluate_retrieval_confidence(candidates)
 
     if not confidence.sufficient:
         raise HTTPException(
@@ -343,13 +443,13 @@ def review_next_concept(
         limit=3,
     )
 
-    context = build_rag_context(
-        reranked
-    )
+    context = build_rag_context(reranked)
 
     challenge = generate_challenge_question(
         context=context,
-         target_concept=target.concept,
+        target_concept=target.concept,
+        target_gap=target_gap,
+        target_gap_description=target_gap_description,
     )
 
     stored_challenge = StudyChallenge(
@@ -386,98 +486,4 @@ def review_next_concept(
             )
             for source in context.sources
         ],
-    )
-    
-@router.get(
-    "/gaps",
-    response_model=KnowledgeGapResponse,
-)
-def get_learning_gaps(
-    project_id: UUID | None = Query(default=None),
-    document_id: UUID | None = Query(default=None),
-    db: Session = Depends(get_db),
-) -> KnowledgeGapResponse:
-    statement = (
-        select(
-            ChallengeAttempt,
-            StudyChallenge,
-        )
-        .join(
-            StudyChallenge,
-            ChallengeAttempt.challenge_id == StudyChallenge.id,
-        )
-        .where(
-            StudyChallenge.concept != "legacy"
-        )
-    )
-
-    if project_id is not None:
-        statement = statement.where(
-            StudyChallenge.project_id == project_id
-        )
-
-    if document_id is not None:
-        statement = statement.where(
-            StudyChallenge.document_id == document_id
-        )
-
-    rows = db.execute(statement).all()
-
-    gap_counts: dict[tuple[str, str, str], int] = {}
-
-    for attempt, challenge in rows:
-        if not attempt.missing_points:
-            continue
-
-        try:
-            missing_points = json.loads(
-                attempt.missing_points
-            )
-        except json.JSONDecodeError:
-            continue
-
-        if not isinstance(missing_points, list):
-            continue
-
-        for gap in missing_points:
-            if not isinstance(gap, str):
-                continue
-
-            gap = gap.strip()
-
-            if not gap:
-                continue
-
-            key = (
-                challenge.topic,
-                challenge.concept,
-                gap,
-            )
-
-            gap_counts[key] = (
-                gap_counts.get(key, 0) + 1
-            )
-
-    items = [
-        KnowledgeGapItem(
-            topic=topic,
-            concept=concept,
-            gap=gap,
-            occurrences=count,
-        )
-        for (
-            topic,
-            concept,
-            gap,
-        ), count in gap_counts.items()
-    ]
-
-    items.sort(
-        key=lambda item: item.occurrences,
-        reverse=True,
-    )
-
-    return KnowledgeGapResponse(
-        total_gaps=len(items),
-        items=items,
     )
