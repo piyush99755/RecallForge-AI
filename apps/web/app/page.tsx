@@ -1,18 +1,31 @@
 import React from "react";
+import { getReviewQueue } from "@/lib/api";
+
+export const dynamic = "force-dynamic";
+import { ReviewQueueResponse } from "@/lib/types";
 import { SectionHeading } from "@/components/section-heading";
 import { NextReviewCard } from "@/components/next-review-card";
 import { MasteryCard } from "@/components/mastery-card";
 import { KnowledgeGapCard } from "@/components/knowledge-gap-card";
 import { ReviewQueueCard } from "@/components/review-queue-card";
-import {
-  MOCK_NEXT_REVIEW,
-  MOCK_SUMMARY,
-  MOCK_KNOWLEDGE_GAPS,
-  MOCK_REVIEW_QUEUE,
-} from "@/lib/mock-data";
-import { Flame, Sparkles } from "lucide-react";
+import { MOCK_SUMMARY, MOCK_KNOWLEDGE_GAPS } from "@/lib/mock-data";
+import { Flame, Sparkles, CheckCircle2, AlertCircle } from "lucide-react";
 
-export default function DashboardPage() {
+export default async function DashboardPage() {
+  let reviewQueue: ReviewQueueResponse | null = null;
+  let isApiError = false;
+
+  try {
+    reviewQueue = await getReviewQueue();
+  } catch (error) {
+    console.error("Failed to fetch review queue from FastAPI backend:", error);
+    isApiError = true;
+  }
+
+  const hasItems = Boolean(reviewQueue && reviewQueue.items.length > 0);
+  const nextReviewItem = hasItems ? reviewQueue!.items[0] : null;
+  const previewItems = hasItems ? reviewQueue!.items.slice(0, 3) : [];
+
   return (
     <div className="space-y-8">
       {/* Welcome & Motivational Header */}
@@ -50,8 +63,35 @@ export default function DashboardPage() {
       {/* Main Grid: Next Review Hero + Mastery Overview */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2">
-          <NextReviewCard item={MOCK_NEXT_REVIEW} />
+          {isApiError ? (
+            <div className="h-full rounded-2xl bg-card border border-border p-8 shadow-cockpit flex flex-col items-center justify-center text-center">
+              <div className="w-12 h-12 rounded-2xl bg-amber-500/10 text-amber-600 flex items-center justify-center mb-3">
+                <AlertCircle className="w-6 h-6" />
+              </div>
+              <h3 className="text-base font-bold text-foreground mb-1">
+                Review data is temporarily unavailable
+              </h3>
+              <p className="text-xs text-muted-foreground max-w-sm">
+                Could not reach the FastAPI study engine backend. Verify that local server is running at http://127.0.0.1:8001.
+              </p>
+            </div>
+          ) : nextReviewItem ? (
+            <NextReviewCard item={nextReviewItem} />
+          ) : (
+            <div className="h-full rounded-2xl bg-card border border-border p-8 shadow-cockpit flex flex-col items-center justify-center text-center">
+              <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 text-emerald-600 flex items-center justify-center mb-3">
+                <CheckCircle2 className="w-6 h-6" />
+              </div>
+              <h3 className="text-base font-bold text-foreground mb-1">
+                All caught up on reviews!
+              </h3>
+              <p className="text-xs text-muted-foreground max-w-sm">
+                No concepts are currently due for spaced repetition. Complete a new study challenge to add concepts to your queue.
+              </p>
+            </div>
+          )}
         </div>
+
         <div>
           <MasteryCard summary={MOCK_SUMMARY} />
         </div>
@@ -76,7 +116,15 @@ export default function DashboardPage() {
           title="Spaced Repetition Queue"
           subtitle="Concepts sorted by decay schedule and review urgency"
         />
-        <ReviewQueueCard items={MOCK_REVIEW_QUEUE} />
+        {isApiError ? (
+          <div className="rounded-2xl bg-card border border-border p-6 shadow-cockpit text-center">
+            <p className="text-sm font-semibold text-muted-foreground">
+              Review data is temporarily unavailable.
+            </p>
+          </div>
+        ) : (
+          <ReviewQueueCard items={previewItems} />
+        )}
       </div>
     </div>
   );
