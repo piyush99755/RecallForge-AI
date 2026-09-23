@@ -54,41 +54,41 @@ export function MasteryCard({ summary }: MasteryCardProps) {
 
         {/* Metrics Grid */}
         <div className="grid grid-cols-2 gap-3">
-          <div className="p-3 rounded-xl bg-emerald-500/5 border border-emerald-500/15 flex items-center gap-3">
-            <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
+          <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center gap-3">
+            <CheckCircle2 className="w-5 h-5 text-emerald-600 dark:text-emerald-400 shrink-0" />
             <div>
               <p className="text-xs text-muted-foreground font-medium">Mastered</p>
-              <p className="text-lg font-bold text-emerald-950 dark:text-emerald-300">
+              <p className="text-lg font-bold text-foreground">
                 {mastered_count} <span className="text-xs text-muted-foreground font-normal">({masteredPct}%)</span>
               </p>
             </div>
           </div>
 
-          <div className="p-3 rounded-xl bg-blue-500/5 border border-blue-500/15 flex items-center gap-3">
-            <TrendingUp className="w-5 h-5 text-blue-600 shrink-0" />
+          <div className="p-3 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center gap-3">
+            <TrendingUp className="w-5 h-5 text-blue-600 dark:text-blue-400 shrink-0" />
             <div>
               <p className="text-xs text-muted-foreground font-medium">Strong</p>
-              <p className="text-lg font-bold text-blue-950 dark:text-blue-300">
+              <p className="text-lg font-bold text-foreground">
                 {strong_count} <span className="text-xs text-muted-foreground font-normal">({strongPct}%)</span>
               </p>
             </div>
           </div>
 
-          <div className="p-3 rounded-xl bg-amber-500/5 border border-amber-500/15 flex items-center gap-3">
-            <AlertCircle className="w-5 h-5 text-amber-600 shrink-0" />
+          <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center gap-3">
+            <AlertCircle className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0" />
             <div>
               <p className="text-xs text-muted-foreground font-medium">Developing</p>
-              <p className="text-lg font-bold text-amber-950 dark:text-amber-300">
+              <p className="text-lg font-bold text-foreground">
                 {developing_count} <span className="text-xs text-muted-foreground font-normal">({developingPct}%)</span>
               </p>
             </div>
           </div>
 
-          <div className="p-3 rounded-xl bg-rose-500/5 border border-rose-500/15 flex items-center gap-3">
-            <AlertCircle className="w-5 h-5 text-rose-600 shrink-0" />
+          <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 flex items-center gap-3">
+            <AlertCircle className="w-5 h-5 text-rose-600 dark:text-rose-400 shrink-0" />
             <div>
               <p className="text-xs text-muted-foreground font-medium">Needs Work</p>
-              <p className="text-lg font-bold text-rose-950 dark:text-rose-300">
+              <p className="text-lg font-bold text-foreground">
                 {weak_count} <span className="text-xs text-muted-foreground font-normal">({weakPct}%)</span>
               </p>
             </div>

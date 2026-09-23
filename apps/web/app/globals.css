@@ -4,37 +4,30 @@
 
 @layer base {
   :root {
-    /* Base background: Soft off-white / slate */
+    /* Light Theme (Calm Study Cockpit) */
     --background: 210 40% 98%;
     --foreground: 222 47% 11%;
 
-    /* Surface cards */
     --card: 0 0% 100%;
     --card-foreground: 222 47% 11%;
 
-    /* Soft light borders */
     --border: 214 32% 91%;
     --input: 214 32% 91%;
     --ring: 244 47% 20%;
 
-    /* Primary color: Deep navy / indigo */
     --primary: 244 47% 20%;
     --primary-foreground: 210 40% 98%;
     --primary-hover: 244 47% 28%;
 
-    /* Secondary actions */
     --secondary: 210 40% 96.1%;
     --secondary-foreground: 222 47% 11.2%;
 
-    /* Muted elements */
     --muted: 210 40% 96.1%;
     --muted-foreground: 215.4 16.3% 44%;
 
-    /* Accent */
     --accent: 217.2 91.2% 59.8%;
     --accent-foreground: 222 47% 11%;
 
-    /* Status indicators */
     --success: 160 84% 39%;
     --success-foreground: 0 0% 100%;
     --success-subtle: 152 81% 96%;
@@ -47,11 +40,53 @@
     --destructive-foreground: 0 0% 100%;
     --destructive-subtle: 343 100% 97%;
 
-    /* Learning Mastery Level Colors */
     --mastery-weak: 346 84% 61%;
     --mastery-developing: 38 92% 50%;
     --mastery-strong: 217 91% 60%;
     --mastery-mastered: 160 84% 39%;
+  }
+
+  .dark {
+    /* Dark Theme (Deep Slate/Navy Study Cockpit - No Pure Black) */
+    --background: 222 47% 9%;       /* #0b0f19 - deep slate navy */
+    --foreground: 210 40% 98%;       /* #f8fafc - high contrast clean text */
+
+    --card: 222 47% 12%;             /* #101726 - elevated card surface */
+    --card-foreground: 210 40% 98%;
+
+    --border: 217 33% 18%;           /* #1e293b - subtle slate border */
+    --input: 217 33% 18%;
+    --ring: 238 84% 67%;
+
+    --primary: 238 84% 67%;          /* #818cf8 - soft indigo accent */
+    --primary-foreground: 222 47% 9%;
+    --primary-hover: 238 84% 75%;
+
+    --secondary: 217 33% 17%;
+    --secondary-foreground: 210 40% 98%;
+
+    --muted: 217 33% 16%;            /* #192338 - muted background */
+    --muted-foreground: 215 20% 65%; /* #94a3b8 - readable secondary text */
+
+    --accent: 217 91% 60%;
+    --accent-foreground: 210 40% 98%;
+
+    --success: 160 84% 45%;          /* #10b981 - emerald progress */
+    --success-foreground: 222 47% 9%;
+    --success-subtle: 160 84% 12%;
+
+    --warning: 38 92% 55%;           /* #f59e0b - soft amber due state */
+    --warning-foreground: 222 47% 9%;
+    --warning-subtle: 38 92% 12%;
+
+    --destructive: 346 84% 65%;       /* #f43f5e - soft rose weak state */
+    --destructive-foreground: 222 47% 9%;
+    --destructive-subtle: 346 84% 12%;
+
+    --mastery-weak: 346 84% 65%;
+    --mastery-developing: 38 92% 55%;
+    --mastery-strong: 217 91% 65%;
+    --mastery-mastered: 160 84% 45%;
   }
 }
 
@@ -61,6 +96,6 @@
   }
 
   body {
-    @apply bg-background text-foreground font-sans antialiased selection:bg-primary/10 selection:text-primary;
+    @apply bg-background text-foreground font-sans antialiased selection:bg-primary/20 selection:text-primary transition-colors duration-200;
   }
 }

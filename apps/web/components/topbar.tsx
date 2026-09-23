@@ -1,6 +1,7 @@
 "use client";
 
 import { Menu, Search, Sparkles } from "lucide-react";
+import { ThemeToggle } from "./theme-toggle";
 
 interface TopbarProps {
   onToggleSidebar: () => void;
@@ -8,7 +9,7 @@ interface TopbarProps {
 
 export function Topbar({ onToggleSidebar }: TopbarProps) {
   return (
-    <header className="sticky top-0 z-30 h-16 bg-card/80 backdrop-blur-md border-b border-border px-4 sm:px-6 flex items-center justify-between gap-4">
+    <header className="sticky top-0 z-30 h-16 bg-card/80 backdrop-blur-md border-b border-border px-4 sm:px-6 flex items-center justify-between gap-4 transition-colors duration-200">
       <div className="flex items-center gap-3">
         <button
           type="button"
@@ -35,7 +36,8 @@ export function Topbar({ onToggleSidebar }: TopbarProps) {
       <div className="flex items-center gap-3">
         <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-700 dark:text-emerald-400 text-xs font-medium">
           <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-          <span>Study Engine Ready</span>
+          <span className="hidden sm:inline">Study Engine Ready</span>
+          <span className="sm:hidden">Ready</span>
         </div>
 
         <button
@@ -45,6 +47,8 @@ export function Topbar({ onToggleSidebar }: TopbarProps) {
           <Sparkles className="w-3.5 h-3.5" />
           <span>Quick Ask</span>
         </button>
+
+        <ThemeToggle />
       </div>
     </header>
   );

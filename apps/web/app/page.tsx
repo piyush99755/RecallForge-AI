@@ -29,7 +29,7 @@ export default async function DashboardPage() {
   return (
     <div className="space-y-8">
       {/* Welcome & Motivational Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-6 sm:p-8 rounded-3xl bg-gradient-to-r from-primary to-indigo-900 text-primary-foreground shadow-md">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-6 sm:p-8 rounded-3xl bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 dark:from-slate-950 dark:via-indigo-950/80 dark:to-slate-950 border border-indigo-500/20 text-white shadow-md">
         <div>
           <div className="flex items-center gap-2 mb-2">
             <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/10 text-white text-xs font-semibold backdrop-blur-xs">
@@ -44,7 +44,7 @@ export default async function DashboardPage() {
           <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-white">
             Ready for your next review?
           </h1>
-          <p className="text-sm text-indigo-100 mt-1 max-w-xl">
+          <p className="text-sm text-indigo-100/90 mt-1 max-w-xl">
             Focus on high-priority concepts and reinforce weak knowledge gaps to build long-term retention.
           </p>
         </div>
@@ -65,7 +65,7 @@ export default async function DashboardPage() {
         <div className="lg:col-span-2">
           {isApiError ? (
             <div className="h-full rounded-2xl bg-card border border-border p-8 shadow-cockpit flex flex-col items-center justify-center text-center">
-              <div className="w-12 h-12 rounded-2xl bg-amber-500/10 text-amber-600 flex items-center justify-center mb-3">
+              <div className="w-12 h-12 rounded-2xl bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center mb-3">
                 <AlertCircle className="w-6 h-6" />
               </div>
               <h3 className="text-base font-bold text-foreground mb-1">
@@ -79,7 +79,7 @@ export default async function DashboardPage() {
             <NextReviewCard item={nextReviewItem} />
           ) : (
             <div className="h-full rounded-2xl bg-card border border-border p-8 shadow-cockpit flex flex-col items-center justify-center text-center">
-              <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 text-emerald-600 flex items-center justify-center mb-3">
+              <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center mb-3">
                 <CheckCircle2 className="w-6 h-6" />
               </div>
               <h3 className="text-base font-bold text-foreground mb-1">
