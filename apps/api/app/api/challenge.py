@@ -15,6 +15,7 @@ from app.db.models import (
     ChallengeAttempt,
     StudyChallenge,
 )
+from app.learning.gap_service import process_attempt_knowledge_gaps
 
 
 router = APIRouter(
@@ -182,7 +183,9 @@ def evaluate_challenge(
             evaluation.missing_points
         ),
     )
+
     db.add(attempt)
+    db.flush()
 
     progress = update_concept_progress(
         db=db,
@@ -191,6 +194,13 @@ def evaluate_challenge(
         correct=evaluation.correct,
     )
 
+    process_attempt_knowledge_gaps(
+        db=db,
+        attempt=attempt,
+        challenge=challenge,
+        missing_points=evaluation.missing_points,
+    )
+    
     try:
         db.commit()
     except Exception:

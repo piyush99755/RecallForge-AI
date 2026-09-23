@@ -1,8 +1,8 @@
 from uuid import UUID
-
+import json
 from fastapi import APIRouter, Depends, Query, HTTPException
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 
@@ -11,6 +11,13 @@ from datetime import datetime, timezone
 from app.api.challenge import (
     ChallengeResponse,
     ChallengeSourceResponse,
+)
+from app.db.models import (
+    ChallengeAttempt,
+    ChallengeAttemptGap,
+    ConceptProgress,
+    KnowledgeGap,
+    StudyChallenge,
 )
 from app.rag.challenge import generate_challenge_question
 from app.rag.context import build_rag_context
@@ -52,6 +59,7 @@ class LearningProgressItem(BaseModel):
     incorrect_count: int
     mastery_level: str
     next_review_at: datetime | None
+    review_status: str
     
 class LearningProgressResponse(BaseModel):
     summary: LearningProgressSummary
@@ -62,7 +70,18 @@ class ReviewNextRequest(BaseModel):
     project_id: UUID | None = None
     document_id: UUID | None = None
     
+class KnowledgeGapItem(BaseModel):
+    concept: str
+    topic: str
+    gap_key: str
+    display_name: str
+    description: str
+    occurrences: int
 
+
+class KnowledgeGapResponse(BaseModel):
+    total_gaps: int
+    items: list[KnowledgeGapItem]
 
 
 def calculate_review_priority(row: ConceptProgress) -> float:
@@ -156,99 +175,105 @@ def build_review_reason(row: ConceptProgress) -> str:
         "This concept is recommended for review based on "
         "your learning history."
     )
+    
+def get_review_status(row: ConceptProgress) -> str:
+    if row.next_review_at is None:
+        return "not_scheduled"
+
+    now = datetime.now(timezone.utc)
+
+    if row.next_review_at < now:
+        return "overdue"
+
+    if row.next_review_at.date() == now.date():
+        return "due_now"
+
+    return "scheduled"
         
 @router.get(
-    "/progress",
-    response_model=LearningProgressResponse,
+    "/gaps",
+    response_model=KnowledgeGapResponse,
 )
-def get_learning_progress(
+def get_learning_gaps(
     project_id: UUID | None = Query(default=None),
     document_id: UUID | None = Query(default=None),
     db: Session = Depends(get_db),
-) -> LearningProgressResponse:
-    statement = select(ConceptProgress)
+) -> KnowledgeGapResponse:
+    occurrence_count = func.count(
+        ChallengeAttemptGap.id
+    ).label("occurrences")
+
+    statement = (
+        select(
+            KnowledgeGap.concept,
+            StudyChallenge.topic,
+            KnowledgeGap.gap_key,
+            KnowledgeGap.display_name,
+            KnowledgeGap.description,
+            occurrence_count,
+        )
+        .join(
+            ChallengeAttemptGap,
+            ChallengeAttemptGap.knowledge_gap_id
+            == KnowledgeGap.id,
+        )
+        .join(
+            ChallengeAttempt,
+            ChallengeAttempt.id
+            == ChallengeAttemptGap.attempt_id,
+        )
+        .join(
+            StudyChallenge,
+            StudyChallenge.id
+            == ChallengeAttempt.challenge_id,
+        )
+        .where(
+            StudyChallenge.concept != "legacy"
+        )
+    )
 
     if project_id is not None:
         statement = statement.where(
-            ConceptProgress.project_id == project_id
+            KnowledgeGap.project_id == project_id
         )
 
     if document_id is not None:
         statement = statement.where(
-            ConceptProgress.document_id == document_id
+            KnowledgeGap.document_id == document_id
         )
 
-    statement = statement.order_by(
-        ConceptProgress.average_score.asc(),
-        ConceptProgress.attempts.desc(),
+    statement = (
+        statement
+        .group_by(
+            KnowledgeGap.id,
+            KnowledgeGap.concept,
+            StudyChallenge.topic,
+            KnowledgeGap.gap_key,
+            KnowledgeGap.display_name,
+            KnowledgeGap.description,
+        )
+        .order_by(
+            occurrence_count.desc()
+        )
     )
 
-    rows = db.scalars(statement).all()
-    
-    real_rows = [
-        row
-        for row in rows
-        if row.concept != "legacy"
-    ]
-    
-    summary = LearningProgressSummary(
-        total_concepts=len(real_rows),
-        weak_count=sum(
-            1 for row in real_rows
-            if row.mastery_level == "weak"
-        ),
-        developing_count=sum(
-            1 for row in real_rows
-            if row.mastery_level == "developing"
-        ),
-        strong_count=sum(
-            1 for row in real_rows
-            if row.mastery_level == "strong"
-        ),
-        mastered_count=sum(
-            1 for row in real_rows
-            if row.mastery_level == "mastered"
-        ),
-    )
-    
-    ranked_rows = sorted(
-        real_rows,
-        key=calculate_review_priority,
-        reverse=True,
-    )
-    
-    recommended_next_concepts = [
-    RecommendedConcept(
-            topic=row.topic,
+    rows = db.execute(statement).all()
+
+    items = [
+        KnowledgeGapItem(
             concept=row.concept,
-            average_score=row.average_score,
-            mastery_level=row.mastery_level,
-            attempts=row.attempts,
-            priority_score=round(
-                calculate_review_priority(row),
-                3,
-            ),
-            reason=build_review_reason(row),
+            topic=row.topic,
+            gap_key=row.gap_key,
+            display_name=row.display_name,
+            description=row.description,
+            occurrences=row.occurrences,
         )
-        for row in ranked_rows[:5]
+        for row in rows
     ]
-    return LearningProgressResponse(
-                summary=summary,
-                recommended_next_concepts=recommended_next_concepts,
-                items=[
-                        LearningProgressItem(
-                            topic=row.topic,
-                            concept=row.concept,
-                            attempts=row.attempts,
-                            average_score=row.average_score,
-                            last_score=row.last_score,
-                            correct_count=row.correct_count,
-                            incorrect_count=row.incorrect_count,
-                            mastery_level=row.mastery_level,
-                            next_review_at=row.next_review_at,
-                        )
-                        for row in real_rows
-                    ],
+
+    return KnowledgeGapResponse(
+        total_gaps=len(items),
+        items=items,
     )
     
 @router.post(
@@ -361,4 +386,98 @@ def review_next_concept(
             )
             for source in context.sources
         ],
+    )
+    
+@router.get(
+    "/gaps",
+    response_model=KnowledgeGapResponse,
+)
+def get_learning_gaps(
+    project_id: UUID | None = Query(default=None),
+    document_id: UUID | None = Query(default=None),
+    db: Session = Depends(get_db),
+) -> KnowledgeGapResponse:
+    statement = (
+        select(
+            ChallengeAttempt,
+            StudyChallenge,
+        )
+        .join(
+            StudyChallenge,
+            ChallengeAttempt.challenge_id == StudyChallenge.id,
+        )
+        .where(
+            StudyChallenge.concept != "legacy"
+        )
+    )
+
+    if project_id is not None:
+        statement = statement.where(
+            StudyChallenge.project_id == project_id
+        )
+
+    if document_id is not None:
+        statement = statement.where(
+            StudyChallenge.document_id == document_id
+        )
+
+    rows = db.execute(statement).all()
+
+    gap_counts: dict[tuple[str, str, str], int] = {}
+
+    for attempt, challenge in rows:
+        if not attempt.missing_points:
+            continue
+
+        try:
+            missing_points = json.loads(
+                attempt.missing_points
+            )
+        except json.JSONDecodeError:
+            continue
+
+        if not isinstance(missing_points, list):
+            continue
+
+        for gap in missing_points:
+            if not isinstance(gap, str):
+                continue
+
+            gap = gap.strip()
+
+            if not gap:
+                continue
+
+            key = (
+                challenge.topic,
+                challenge.concept,
+                gap,
+            )
+
+            gap_counts[key] = (
+                gap_counts.get(key, 0) + 1
+            )
+
+    items = [
+        KnowledgeGapItem(
+            topic=topic,
+            concept=concept,
+            gap=gap,
+            occurrences=count,
+        )
+        for (
+            topic,
+            concept,
+            gap,
+        ), count in gap_counts.items()
+    ]
+
+    items.sort(
+        key=lambda item: item.occurrences,
+        reverse=True,
+    )
+
+    return KnowledgeGapResponse(
+        total_gaps=len(items),
+        items=items,
     )
