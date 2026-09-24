@@ -1,48 +1,115 @@
 import uuid
-
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
-from sqlalchemy import select
-from sqlalchemy.orm import Session
 from pathlib import Path
+
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Depends,
+    File,
+    Form,
+    HTTPException,
+    Query,
+    UploadFile,
+)
+from sqlalchemy import select
+from sqlalchemy.orm import Session, joinedload
+
 from app.api.schemas.documents import (
+    DocumentListItem,
+    DocumentListResponse,
+    IngestDocumentResponse,
     ParseDocumentResponse,
     ParsedPageResponse,
     UploadDocumentResponse,
 )
-from app.ingestion.parsers.pdf import parse_pdf
-from app.api.schemas.documents import UploadDocumentResponse
 from app.db.models import Document, DocumentVersion, Project
 from app.db.session import get_db
 from app.ingestion.checksum import calculate_sha256
+from app.ingestion.parsers.pdf import parse_pdf
+from app.ingestion.pipeline import process_document_version
+from app.ingestion.service import (
+    embed_document_version_service,
+    ingest_document_version_service,
+)
 from app.ingestion.storage import build_storage_path, save_file
-from app.api.schemas.documents import IngestDocumentResponse
-from app.ingestion.persist import persist_sections_and_chunks
-from app.ingestion.structure.sections import build_sections
-from app.ai.embeddings.service import embed_document_version
-
+from app.projects.service import get_or_create_default_project
 
 router = APIRouter(
     prefix="/documents",
     tags=["documents"],
 )
 
+
+@router.get(
+    "",
+    response_model=DocumentListResponse,
+)
+def list_documents(
+    project_id: uuid.UUID | None = Query(default=None),
+    db: Session = Depends(get_db),
+) -> DocumentListResponse:
+    statement = select(Document).options(joinedload(Document.versions))
+
+    if project_id is not None:
+        statement = statement.where(Document.project_id == project_id)
+
+    statement = statement.order_by(Document.created_at.desc())
+
+    documents = db.scalars(statement).unique().all()
+
+    items = []
+    for doc in documents:
+        # Highest version_number is the authoritative latest-version selector
+        latest_version = (
+            max(doc.versions, key=lambda v: v.version_number)
+            if doc.versions
+            else None
+        )
+
+        items.append(
+            DocumentListItem(
+                document_id=doc.id,
+                project_id=doc.project_id,
+                title=doc.title,
+                document_type=doc.document_type,
+                latest_version_id=latest_version.id if latest_version else None,
+                version_number=latest_version.version_number if latest_version else None,
+                original_filename=latest_version.original_filename if latest_version else None,
+                mime_type=latest_version.mime_type if latest_version else None,
+                file_size_bytes=latest_version.file_size_bytes if latest_version else None,
+                processing_status=latest_version.processing_status if latest_version else None,
+                created_at=doc.created_at,
+                updated_at=doc.updated_at,
+            )
+        )
+
+    return DocumentListResponse(
+        items=items,
+        total=len(items),
+    )
+
+
 @router.post(
     "/upload",
     response_model=UploadDocumentResponse,
 )
 async def upload_document(
-    project_id: uuid.UUID = Form(...),
+    background_tasks: BackgroundTasks,
     title: str = Form(...),
     file: UploadFile = File(...),
+    project_id: uuid.UUID | None = Form(default=None),
     db: Session = Depends(get_db),
 ):
-    project = db.get(Project, project_id)
-
-    if project is None:
-        raise HTTPException(
-            status_code=404,
-            detail="Project not found",
-        )
+    if project_id is not None:
+        project = db.get(Project, project_id)
+        if project is None:
+            raise HTTPException(
+                status_code=404,
+                detail="Project not found",
+            )
+    else:
+        project = get_or_create_default_project(db)
+        project_id = project.id
 
     file_bytes = await file.read()
 
@@ -61,6 +128,15 @@ async def upload_document(
     )
 
     if existing_version is not None:
+        # If existing version is incomplete or failed, schedule background reprocessing
+        if existing_version.processing_status in (
+            "pending",
+            "failed",
+            "embedding_failed",
+            "ready_for_embedding",
+        ):
+            background_tasks.add_task(process_document_version, existing_version.id)
+
         return UploadDocumentResponse(
             document_id=existing_version.document_id,
             document_version_id=existing_version.id,
@@ -106,6 +182,9 @@ async def upload_document(
     db.commit()
     db.refresh(document_version)
 
+    # Schedule automatic background ingestion & embedding pipeline
+    background_tasks.add_task(process_document_version, document_version.id)
+
     return UploadDocumentResponse(
         document_id=document.id,
         document_version_id=document_version.id,
@@ -115,7 +194,8 @@ async def upload_document(
         processing_status=document_version.processing_status,
         duplicate=False,
     )
-    
+
+
 @router.post(
     "/versions/{document_version_id}/parse",
     response_model=ParseDocumentResponse,
@@ -165,7 +245,8 @@ def parse_document_version(
             for page in pages
         ],
     )
-    
+
+
 @router.post(
     "/versions/{document_version_id}/ingest",
     response_model=IngestDocumentResponse,
@@ -185,40 +266,10 @@ def ingest_document_version(
             detail="Document version not found",
         )
 
-    if document_version.mime_type != "application/pdf":
-        raise HTTPException(
-            status_code=400,
-            detail="Only PDF ingestion is supported currently",
-        )
-
-    path = Path(document_version.storage_key)
-
-    if not path.exists():
-        raise HTTPException(
-            status_code=404,
-            detail="Stored file not found",
-        )
-
-    document_version.processing_status = "processing"
-    db.commit()
-
-    try:
-        pages = parse_pdf(path)
-        parsed_sections = build_sections(pages)
-
-        section_count, chunk_count = persist_sections_and_chunks(
-            db=db,
-            document_version=document_version,
-            parsed_sections=parsed_sections,
-        )
-
-    except Exception:
-        db.rollback()
-
-        document_version.processing_status = "failed"
-        db.commit()
-
-        raise
+    section_count, chunk_count = ingest_document_version_service(
+        db=db,
+        document_version=document_version,
+    )
 
     return IngestDocumentResponse(
         document_version_id=document_version.id,
@@ -227,7 +278,8 @@ def ingest_document_version(
         section_count=section_count,
         chunk_count=chunk_count,
     )
-    
+
+
 @router.post("/versions/{document_version_id}/embed")
 def embed_document_version_endpoint(
     document_version_id: uuid.UUID,
@@ -245,23 +297,11 @@ def embed_document_version_endpoint(
             detail="Document version not found",
         )
 
-    try:
-        document_version.processing_status = "embedding"
-        db.commit()
-
-        embedded_count, total_chunks = embed_document_version(
-            db=db,
-            document_version=document_version,
-            force=force,
-        )
-
-    except Exception:
-        db.rollback()
-
-        document_version.processing_status = "embedding_failed"
-        db.commit()
-
-        raise
+    embedded_count, total_chunks = embed_document_version_service(
+        db=db,
+        document_version=document_version,
+        force=force,
+    )
 
     return {
         "document_version_id": str(document_version.id),
