@@ -1,4 +1,6 @@
 import {
+  AskRequest,
+  AskResponse,
   DocumentListResponse,
   ProjectListResponse,
   ReviewQueueResponse,
@@ -130,6 +132,46 @@ export async function uploadDocument(
 
     throw new ApiError(
       `Document upload failed (${response.status}: ${errorDetail})`,
+      response.status
+    );
+  }
+
+  return response.json();
+}
+
+/**
+ * Sends a grounded Q&A prompt to FastAPI endpoint POST /ask
+ */
+export async function askRecallForge(
+  payload: AskRequest
+): Promise<AskResponse> {
+  const url = `${API_BASE_URL}/ask`;
+
+  const response = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    let errorDetail = response.statusText;
+    try {
+      const errJson = await response.json();
+      if (errJson.detail) {
+        errorDetail =
+          typeof errJson.detail === "string"
+            ? errJson.detail
+            : JSON.stringify(errJson.detail);
+      }
+    } catch {
+      // Ignore JSON parse errors for non-JSON response body
+    }
+
+    throw new ApiError(
+      `Ask request failed (${response.status}: ${errorDetail})`,
       response.status
     );
   }

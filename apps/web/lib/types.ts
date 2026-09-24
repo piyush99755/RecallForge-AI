@@ -120,3 +120,29 @@ export interface KnowledgeGapResponse {
   total_gaps: number;
   items: KnowledgeGapItem[];
 }
+
+export type StudyMode = "beginner" | "interview" | "senior";
+
+export interface AskRequest {
+  query: string;
+  project_id?: string | null;
+  document_id?: string | null;
+  mode?: StudyMode;
+  candidate_limit?: number;
+  source_limit?: number;
+}
+
+export interface AskSourceResponse {
+  source_id: string;
+  chunk_id: string;
+  document_title: string;
+  section_title: string | null;
+  page_start: number | null;
+  page_end: number | null;
+}
+
+export interface AskResponse {
+  query: string;
+  answer: string;
+  sources: AskSourceResponse[];
+}
