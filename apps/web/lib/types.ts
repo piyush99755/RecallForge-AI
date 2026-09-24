@@ -1,6 +1,49 @@
 export type MasteryLevel = "weak" | "developing" | "strong" | "mastered";
 export type ReviewStatus = "due" | "scheduled" | "new" | string;
 
+export interface ProjectListItem {
+  id: string;
+  name: string;
+  description: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ProjectListResponse {
+  items: ProjectListItem[];
+  total: number;
+}
+
+export interface UploadDocumentResponse {
+  document_id: string;
+  document_version_id: string;
+  version_number: number;
+  filename: string;
+  checksum_sha256: string;
+  processing_status: string;
+  duplicate: boolean;
+}
+
+export interface DocumentListItem {
+  document_id: string;
+  project_id: string;
+  title: string;
+  document_type: string;
+  latest_version_id: string | null;
+  version_number: number | null;
+  original_filename: string | null;
+  mime_type: string | null;
+  file_size_bytes: number | null;
+  processing_status: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DocumentListResponse {
+  items: DocumentListItem[];
+  total: number;
+}
+
 export interface LearningProgressSummary {
   total_concepts: number;
   weak_count: number;
