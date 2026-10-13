@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
+import ReactMarkdown, { type Components } from "react-markdown";
 import { askRecallForge } from "@/lib/api";
 import { AskResponse, StudyMode } from "@/lib/types";
 import {
@@ -16,26 +17,102 @@ import {
   Cpu,
 } from "lucide-react";
 
+function processTextWithCitations(
+  text: string,
+  onCitationClick: (id: string) => void
+): React.ReactNode {
+  const regex = /(\[S\d+(?:\s*,\s*S\d+)*\])/g;
+  const parts = text.split(regex);
+
+  if (parts.length === 1) return text;
+
+  return parts.map((part, idx) => {
+    if (regex.test(part)) {
+      const sourceIds = part.match(/S\d+/g) || [];
+      if (sourceIds.length === 0) return part;
+
+      return (
+        <span key={idx} className="inline-flex items-center gap-1 mx-0.5 align-baseline">
+          {sourceIds.map((id) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => onCitationClick(id)}
+              className="inline-flex items-center px-1.5 py-0.5 rounded-md text-[11px] font-bold bg-primary/15 text-primary hover:bg-primary hover:text-primary-foreground border border-primary/30 transition-all cursor-pointer shadow-2xs"
+              title={`Scroll to source [${id}]`}
+            >
+              [{id}]
+            </button>
+          ))}
+        </span>
+      );
+    }
+    return part;
+  });
+}
+
+function processChildren(
+  children: React.ReactNode,
+  onCitationClick: (id: string) => void
+): React.ReactNode {
+  if (typeof children === "string") {
+    return processTextWithCitations(children, onCitationClick);
+  }
+  if (Array.isArray(children)) {
+    return children.map((child, i) => (
+      <React.Fragment key={i}>
+        {processChildren(child, onCitationClick)}
+      </React.Fragment>
+    ));
+  }
+  return children;
+}
+
 export function AskWorkspace() {
   const [query, setQuery] = useState("");
+  const [submittedQuestion, setSubmittedQuestion] = useState("");
   const [mode, setMode] = useState<StudyMode>("beginner");
   const [isLoading, setIsLoading] = useState(false);
   const [response, setResponse] = useState<AskResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [highlightedSourceId, setHighlightedSourceId] = useState<string | null>(
+    null
+  );
+
+  const highlightTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  const handleCitationClick = (sourceId: string) => {
+    const cardElement = document.getElementById(`source-card-${sourceId}`);
+    if (cardElement) {
+      cardElement.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+
+    setHighlightedSourceId(sourceId);
+
+    if (highlightTimerRef.current) {
+      clearTimeout(highlightTimerRef.current);
+    }
+    highlightTimerRef.current = setTimeout(() => {
+      setHighlightedSourceId(null);
+    }, 2500);
+  };
 
   const handleSubmit = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    if (!query.trim() || isLoading) return;
+    const currentQuery = query.trim();
+    if (!currentQuery || isLoading) return;
 
     setIsLoading(true);
     setError(null);
 
     try {
       const res = await askRecallForge({
-        query: query.trim(),
+        query: currentQuery,
         mode,
       });
       setResponse(res);
+      setSubmittedQuestion(currentQuery);
+      setQuery("");
     } catch (err) {
       console.error("Ask request failed:", err);
       const msg =
@@ -58,7 +135,77 @@ export function AskWorkspace() {
   const isInsufficientConfidence =
     response &&
     (response.sources.length === 0 ||
-      response.answer.includes("couldn't find sufficiently relevant information"));
+      response.answer.includes(
+        "couldn't find sufficiently relevant information"
+      ));
+
+  const markdownComponents: Components = {
+    p: ({ children }) => (
+      <p className="mb-3 leading-relaxed text-foreground/90">
+        {processChildren(children, handleCitationClick)}
+      </p>
+    ),
+    li: ({ children }) => (
+      <li className="my-1 text-foreground/90">
+        {processChildren(children, handleCitationClick)}
+      </li>
+    ),
+    h1: ({ children }) => (
+      <h1 className="text-xl font-bold mt-5 mb-2 text-foreground tracking-tight">
+        {processChildren(children, handleCitationClick)}
+      </h1>
+    ),
+    h2: ({ children }) => (
+      <h2 className="text-lg font-bold mt-4 mb-2 text-foreground tracking-tight">
+        {processChildren(children, handleCitationClick)}
+      </h2>
+    ),
+    h3: ({ children }) => (
+      <h3 className="text-base font-bold mt-3 mb-1.5 text-foreground">
+        {processChildren(children, handleCitationClick)}
+      </h3>
+    ),
+    h4: ({ children }) => (
+      <h4 className="text-sm font-bold mt-2.5 mb-1 text-foreground">
+        {processChildren(children, handleCitationClick)}
+      </h4>
+    ),
+    ul: ({ children }) => (
+      <ul className="list-disc pl-5 my-2 space-y-1 text-foreground/90">
+        {children}
+      </ul>
+    ),
+    ol: ({ children }) => (
+      <ol className="list-decimal pl-5 my-2 space-y-1 text-foreground/90">
+        {children}
+      </ol>
+    ),
+    blockquote: ({ children }) => (
+      <blockquote className="border-l-4 border-primary/40 pl-4 py-1 my-3 bg-muted/30 rounded-r-xl italic text-muted-foreground">
+        {children}
+      </blockquote>
+    ),
+    code: ({ children, className, ...props }) => {
+      const isInline = !className || !className.includes("language-");
+      if (isInline) {
+        return (
+          <code
+            className="bg-muted/80 px-1.5 py-0.5 rounded text-xs font-mono text-primary border border-border/50"
+            {...props}
+          >
+            {children}
+          </code>
+        );
+      }
+      return (
+        <pre className="bg-muted/70 p-4 rounded-xl border border-border/80 overflow-x-auto my-3 text-xs font-mono text-foreground">
+          <code className={className} {...props}>
+            {children}
+          </code>
+        </pre>
+      );
+    },
+  };
 
   return (
     <div className="space-y-8 max-w-4xl mx-auto">
@@ -130,7 +277,17 @@ export function AskWorkspace() {
           </div>
 
           <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
-            <span>Press <kbd className="px-1.5 py-0.5 rounded bg-muted border border-border text-[10px] font-mono">Ctrl</kbd> + <kbd className="px-1.5 py-0.5 rounded bg-muted border border-border text-[10px] font-mono">Enter</kbd> to submit</span>
+            <span>
+              Press{" "}
+              <kbd className="px-1.5 py-0.5 rounded bg-muted border border-border text-[10px] font-mono">
+                Ctrl
+              </kbd>{" "}
+              +{" "}
+              <kbd className="px-1.5 py-0.5 rounded bg-muted border border-border text-[10px] font-mono">
+                Enter
+              </kbd>{" "}
+              to submit
+            </span>
 
             <button
               type="submit"
@@ -176,7 +333,8 @@ export function AskWorkspace() {
             Searching Study Library & Reranking Evidence...
           </h4>
           <p className="text-xs text-muted-foreground max-w-sm mx-auto">
-            Executing hybrid vector & BM25 search across your uploaded technical documents.
+            Executing hybrid vector & BM25 search across your uploaded technical
+            documents.
           </p>
         </div>
       )}
@@ -184,6 +342,19 @@ export function AskWorkspace() {
       {/* Answer & Sources Result Container */}
       {!isLoading && response && (
         <div className="space-y-6">
+          {/* Subtle "Your question" section */}
+          {(submittedQuestion || response.query) && (
+            <div className="p-4 sm:p-5 rounded-2xl bg-card border border-border/70 shadow-cockpit space-y-1.5">
+              <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                <HelpCircle className="w-3.5 h-3.5 text-primary" />
+                <span>Your question</span>
+              </div>
+              <p className="text-sm font-medium text-foreground leading-relaxed whitespace-pre-wrap">
+                {submittedQuestion || response.query}
+              </p>
+            </div>
+          )}
+
           {/* Grounded Answer Card */}
           <div className="p-6 rounded-2xl bg-card border border-border shadow-cockpit space-y-4">
             <div className="flex items-center justify-between border-b border-border/60 pb-3">
@@ -203,12 +374,16 @@ export function AskWorkspace() {
                   <span>Insufficient Evidence in Study Library</span>
                 </div>
                 <p className="leading-relaxed">
-                  RecallForge could not find enough supporting material in your uploaded study documents to generate a grounded answer for this query.
+                  RecallForge could not find enough supporting material in your
+                  uploaded study documents to generate a grounded answer for
+                  this query.
                 </p>
               </div>
             ) : (
-              <div className="prose prose-sm dark:prose-invert max-w-none text-foreground leading-relaxed whitespace-pre-line text-sm">
-                {response.answer}
+              <div className="prose prose-sm dark:prose-invert max-w-none text-foreground text-sm">
+                <ReactMarkdown components={markdownComponents}>
+                  {response.answer}
+                </ReactMarkdown>
               </div>
             )}
           </div>
@@ -224,39 +399,54 @@ export function AskWorkspace() {
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {response.sources.map((src) => (
-                  <div
-                    key={src.source_id}
-                    className="p-4 rounded-xl bg-card border border-border hover:border-primary/40 shadow-cockpit transition-all space-y-2"
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-xs font-bold px-2 py-0.5 rounded-md bg-primary/10 text-primary border border-primary/20">
-                        [{src.source_id}]
-                      </span>
-                      {src.page_start !== null && (
-                        <span className="text-[11px] font-medium text-muted-foreground">
-                          {src.page_start === src.page_end
-                            ? `Page ${src.page_start}`
-                            : `Pages ${src.page_start}–${src.page_end}`}
+                {response.sources.map((src) => {
+                  const isHighlighted =
+                    highlightedSourceId === src.source_id;
+                  return (
+                    <div
+                      key={src.source_id}
+                      id={`source-card-${src.source_id}`}
+                      className={`p-4 rounded-xl bg-card border shadow-cockpit transition-all duration-300 space-y-2 ${
+                        isHighlighted
+                          ? "border-primary ring-2 ring-primary/50 bg-primary/10 scale-[1.02]"
+                          : "border-border hover:border-primary/40"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span
+                          className={`text-xs font-bold px-2 py-0.5 rounded-md border transition-colors ${
+                            isHighlighted
+                              ? "bg-primary text-primary-foreground border-primary"
+                              : "bg-primary/10 text-primary border-primary/20"
+                          }`}
+                        >
+                          [{src.source_id}]
                         </span>
-                      )}
-                    </div>
+                        {src.page_start !== null && (
+                          <span className="text-[11px] font-medium text-muted-foreground">
+                            {src.page_start === src.page_end
+                              ? `Page ${src.page_start}`
+                              : `Pages ${src.page_start}–${src.page_end}`}
+                          </span>
+                        )}
+                      </div>
 
-                    <div className="space-y-1">
-                      <h5 className="text-xs font-bold text-foreground flex items-center gap-1.5 truncate">
-                        <FileText className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-                        <span className="truncate">{src.document_title}</span>
-                      </h5>
+                      <div className="space-y-1">
+                        <h5 className="text-xs font-bold text-foreground flex items-center gap-1.5 truncate">
+                          <FileText className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                          <span className="truncate">{src.document_title}</span>
+                        </h5>
 
-                      {src.section_title && (
-                        <p className="text-[11px] text-muted-foreground flex items-center gap-1 truncate">
-                          <Layers className="w-3 h-3 shrink-0" />
-                          <span className="truncate">{src.section_title}</span>
-                        </p>
-                      )}
+                        {src.section_title && (
+                          <p className="text-[11px] text-muted-foreground flex items-center gap-1 truncate">
+                            <Layers className="w-3 h-3 shrink-0" />
+                            <span className="truncate">{src.section_title}</span>
+                          </p>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           )}
