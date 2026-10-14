@@ -1,5 +1,5 @@
 export type MasteryLevel = "weak" | "developing" | "strong" | "mastered";
-export type ReviewStatus = "due" | "scheduled" | "new" | string;
+export type ReviewStatus = "not_scheduled" | "overdue" | "due_now" | "scheduled" | "due" | string;
 
 export interface ProjectListItem {
   id: string;
@@ -145,4 +145,52 @@ export interface AskResponse {
   query: string;
   answer: string;
   sources: AskSourceResponse[];
+}
+
+export interface ReviewNextRequest {
+  project_id?: string | null;
+  document_id?: string | null;
+}
+
+export interface ChallengeRequest {
+  topic: string;
+  project_id?: string | null;
+  document_id?: string | null;
+  candidate_limit?: number;
+  source_limit?: number;
+}
+
+export interface ChallengeSourceResponse {
+  source_id: string;
+  chunk_id: string;
+  document_title: string;
+  section_title: string | null;
+  page_start: number | null;
+  page_end: number | null;
+}
+
+export interface ChallengeResponse {
+  challenge_id: string | null;
+  topic: string;
+  concept: string | null;
+  question: string;
+  sources: ChallengeSourceResponse[];
+}
+
+export interface ChallengeEvaluationRequest {
+  challenge_id: string;
+  user_answer: string;
+}
+
+export interface ChallengeEvaluationResponse {
+  score: number;
+  correct: boolean;
+  feedback: string;
+  missing_points: string[];
+  expected_answer: string;
+  explanation: string | null;
+  topic: string;
+  attempts: number;
+  average_score: number;
+  mastery_level: MasteryLevel | string;
 }

@@ -1,4 +1,5 @@
 import React from "react";
+import Link from "next/link";
 import { ReviewQueueItem } from "@/lib/types";
 import { formatConceptName, formatMasteryLevel } from "@/lib/formatters";
 import { ArrowRight, AlertTriangle, Sparkles, Clock, Target } from "lucide-react";
@@ -61,8 +62,8 @@ export function NextReviewCard({ item }: NextReviewCardProps) {
                   <span className="text-xs font-bold text-amber-900 dark:text-amber-200 uppercase tracking-wider">
                     Target Gap Detected
                   </span>
-                  <span className="text-[11px] px-1.5 py-0.2 rounded-full bg-amber-200/80 dark:bg-amber-900/50 text-amber-900 dark:text-amber-200 font-semibold">
-                    {item.top_gap.occurrences} {item.top_gap.occurrences === 1 ? "attempt" : "attempts"} affected
+                  <span className="text-[11px] px-2 py-0.5 rounded-full bg-amber-200/80 dark:bg-amber-900/50 text-amber-900 dark:text-amber-200 font-semibold">
+                    Seen {item.top_gap.occurrences} {item.top_gap.occurrences === 1 ? "time" : "times"}
                   </span>
                 </div>
                 <p className="text-sm font-semibold text-foreground">
@@ -83,14 +84,14 @@ export function NextReviewCard({ item }: NextReviewCardProps) {
             <span>{item.attempts} Previous Attempts</span>
           </div>
 
-          <button
-            type="button"
+          <Link
+            href="/review"
             className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-primary text-primary-foreground font-semibold text-sm shadow-md hover:bg-primary-hover hover:shadow-lg focus:outline-hidden focus:ring-2 focus:ring-primary/20 transition-all cursor-pointer"
           >
             <Sparkles className="w-4 h-4" />
             <span>Start Review</span>
             <ArrowRight className="w-4 h-4 ml-1 group-hover:translate-x-1 transition-transform" />
-          </button>
+          </Link>
         </div>
       </div>
     </div>

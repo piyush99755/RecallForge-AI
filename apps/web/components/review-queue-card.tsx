@@ -1,4 +1,5 @@
 import React from "react";
+import Link from "next/link";
 import { ReviewQueueItem } from "@/lib/types";
 import { formatConceptName, formatMasteryLevel } from "@/lib/formatters";
 import { Clock, RotateCcw, ChevronRight, CheckCircle2 } from "lucide-react";
@@ -93,13 +94,13 @@ export function ReviewQueueCard({ items }: ReviewQueueCardProps) {
                   </span>
                 </div>
 
-                <button
-                  type="button"
+                <Link
+                  href="/review"
                   className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-card transition-colors"
                   aria-label={`Review ${formattedConcept}`}
                 >
                   <ChevronRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
-                </button>
+                </Link>
               </div>
             </div>
           );
