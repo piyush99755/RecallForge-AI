@@ -29,12 +29,26 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * Resolves the backend API base URL.
+ * - In production, NEXT_PUBLIC_API_BASE_URL is required (fails with a clear configuration error if missing).
+ * - In development, defaults to http://127.0.0.1:8001 if unset.
+ */
 export function resolveApiBaseUrl(): string {
   const configured = process.env.NEXT_PUBLIC_API_BASE_URL?.trim().replace(
     /\/+$/,
     ""
   );
-  return configured || "http://127.0.0.1:8001";
+  if (configured) {
+    return configured;
+  }
+  if (process.env.NODE_ENV === "production") {
+    throw new ApiError(
+      "Backend API URL is not configured. Set NEXT_PUBLIC_API_BASE_URL in your deployment environment.",
+      500
+    );
+  }
+  return "http://127.0.0.1:8001";
 }
 
 export function getStoredAccessToken(): string | null {

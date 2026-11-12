@@ -109,7 +109,7 @@ export function DocumentList({
             Library data is temporarily unavailable.
           </h4>
           <p className="text-xs text-muted-foreground max-w-sm mx-auto">
-            Could not retrieve document list from FastAPI backend at http://127.0.0.1:8001.
+            Could not retrieve document list from the RecallForge API backend.
           </p>
         </div>
       ) : isLoading ? (

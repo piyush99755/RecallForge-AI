@@ -1,20 +1,24 @@
 from functools import lru_cache
 
-from pydantic import model_validator
+from pydantic import AliasChoices, Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
     app_name: str = "RecallForge AI API"
     app_env: str = "development"
-    debug: bool = True
+    debug: bool | None = None
     database_url: str
     gemini_api_key: str
-    embedding_model: str = "gemini-embedding-001"
+    embedding_model: str = Field(
+        default="gemini-embedding-001",
+        validation_alias=AliasChoices("EMBEDDING_MODEL", "GEMINI_EMBEDDING_MODEL"),
+    )
     reranker_model: str = "gemini-3.6-flash"
 
     # Security & Networking
     api_access_token: str | None = None
+    cors_origins: str = "http://localhost:3000,http://127.0.0.1:3000"
 
     # Document Storage ("local" | "supabase")
     storage_backend: str = "local"
@@ -32,6 +36,9 @@ class Settings(BaseSettings):
     def _validate_production_and_storage_settings(self) -> "Settings":
         self.app_env = (self.app_env or "development").strip().lower()
         self.storage_backend = (self.storage_backend or "local").strip().lower()
+
+        if self.debug is None:
+            self.debug = self.app_env != "production"
 
         if self.api_access_token is not None:
             cleaned_token = self.api_access_token.strip()
@@ -61,6 +68,21 @@ class Settings(BaseSettings):
                 )
 
         return self
+
+    @property
+    def parsed_cors_origins(self) -> list[str]:
+        origins: list[str] = []
+        for raw in (self.cors_origins or "").split(","):
+            origin = raw.strip().rstrip("/")
+            if not origin:
+                continue
+            if origin == "*":
+                raise ValueError(
+                    "Wildcard '*' is not allowed in CORS_ORIGINS when allow_credentials=True."
+                )
+            if origin not in origins:
+                origins.append(origin)
+        return origins
 
 
 @lru_cache
