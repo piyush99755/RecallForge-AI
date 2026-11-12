@@ -6,7 +6,20 @@ from sqlalchemy import pool
 
 from app.core.config import get_settings
 from app.db.base import Base
-from app.db.models import Document, DocumentVersion, Project, Section, Chunk, ChunkEmbedding  # noqa: F401
+import app.db.models  # noqa: F401
+from app.db.models import (  # noqa: F401
+    ChallengeAttempt,
+    ChallengeAttemptGap,
+    Chunk,
+    ChunkEmbedding,
+    ConceptProgress,
+    Document,
+    DocumentVersion,
+    KnowledgeGap,
+    Project,
+    Section,
+    StudyChallenge,
+)
 
 target_metadata = Base.metadata
 
