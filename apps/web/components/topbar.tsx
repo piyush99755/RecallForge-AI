@@ -1,6 +1,7 @@
 "use client";
 
-import { Menu, Search, Sparkles } from "lucide-react";
+import { LogOut, Menu, Search, Sparkles } from "lucide-react";
+import { clearStoredAccessToken } from "@/lib/api";
 import { ThemeToggle } from "./theme-toggle";
 
 interface TopbarProps {
@@ -8,6 +9,10 @@ interface TopbarProps {
 }
 
 export function Topbar({ onToggleSidebar }: TopbarProps) {
+  const handleForgetDevice = () => {
+    clearStoredAccessToken("Device access cleared. Enter your token to sign back in.");
+  };
+
   return (
     <header className="sticky top-0 z-30 h-16 bg-card/80 backdrop-blur-md border-b border-border px-4 sm:px-6 flex items-center justify-between gap-4 transition-colors duration-200">
       <div className="flex items-center gap-3">
@@ -33,7 +38,7 @@ export function Topbar({ onToggleSidebar }: TopbarProps) {
       </div>
 
       {/* Topbar Right Slot */}
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-2.5 sm:gap-3">
         <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-700 dark:text-emerald-400 text-xs font-medium">
           <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
           <span className="hidden sm:inline">Study Engine Ready</span>
@@ -46,6 +51,16 @@ export function Topbar({ onToggleSidebar }: TopbarProps) {
         >
           <Sparkles className="w-3.5 h-3.5" />
           <span>Quick Ask</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={handleForgetDevice}
+          title="Clear stored personal access token on this device"
+          className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1.5 rounded-xl border border-border bg-card text-muted-foreground hover:text-foreground hover:bg-muted transition-colors cursor-pointer"
+        >
+          <LogOut className="w-3.5 h-3.5" />
+          <span className="hidden sm:inline">Forget Device</span>
         </button>
 
         <ThemeToggle />

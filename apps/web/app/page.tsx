@@ -1,12 +1,12 @@
-import React from "react";
+"use client";
+
+import React, { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import {
   getReviewQueue,
   getLearningProgress,
   getKnowledgeGaps,
 } from "@/lib/api";
-
-export const dynamic = "force-dynamic";
 import {
   ReviewQueueResponse,
   LearningProgressResponse,
@@ -23,44 +23,69 @@ import {
   CheckCircle2,
   AlertCircle,
   Trophy,
+  RotateCw,
 } from "lucide-react";
 
-export default async function DashboardPage() {
-  const [queueResult, progressResult, gapsResult] = await Promise.allSettled([
-    getReviewQueue(),
-    getLearningProgress(),
-    getKnowledgeGaps(),
-  ]);
+export default function DashboardPage() {
+  const [reviewQueue, setReviewQueue] = useState<ReviewQueueResponse | null>(
+    null
+  );
+  const [progressData, setProgressData] =
+    useState<LearningProgressResponse | null>(null);
+  const [gapsData, setGapsData] = useState<KnowledgeGapResponse | null>(null);
 
-  const reviewQueue: ReviewQueueResponse | null =
-    queueResult.status === "fulfilled" ? queueResult.value : null;
-  const isQueueError = queueResult.status === "rejected";
-  if (isQueueError) {
-    console.error(
-      "Failed to fetch review queue from FastAPI backend:",
-      queueResult.reason
-    );
-  }
+  const [isLoading, setIsLoading] = useState(true);
+  const [isQueueError, setIsQueueError] = useState(false);
+  const [isProgressError, setIsProgressError] = useState(false);
+  const [isGapsError, setIsGapsError] = useState(false);
 
-  const progressData: LearningProgressResponse | null =
-    progressResult.status === "fulfilled" ? progressResult.value : null;
-  const isProgressError = progressResult.status === "rejected";
-  if (isProgressError) {
-    console.error(
-      "Failed to fetch learning progress from FastAPI backend:",
-      progressResult.reason
-    );
-  }
+  const loadDashboard = useCallback(async () => {
+    setIsLoading(true);
+    const [queueResult, progressResult, gapsResult] = await Promise.allSettled([
+      getReviewQueue(),
+      getLearningProgress(),
+      getKnowledgeGaps(),
+    ]);
 
-  const gapsData: KnowledgeGapResponse | null =
-    gapsResult.status === "fulfilled" ? gapsResult.value : null;
-  const isGapsError = gapsResult.status === "rejected";
-  if (isGapsError) {
-    console.error(
-      "Failed to fetch knowledge gaps from FastAPI backend:",
-      gapsResult.reason
-    );
-  }
+    if (queueResult.status === "fulfilled") {
+      setReviewQueue(queueResult.value);
+      setIsQueueError(false);
+    } else {
+      console.error(
+        "Failed to fetch review queue from backend:",
+        queueResult.reason
+      );
+      setIsQueueError(true);
+    }
+
+    if (progressResult.status === "fulfilled") {
+      setProgressData(progressResult.value);
+      setIsProgressError(false);
+    } else {
+      console.error(
+        "Failed to fetch learning progress from backend:",
+        progressResult.reason
+      );
+      setIsProgressError(true);
+    }
+
+    if (gapsResult.status === "fulfilled") {
+      setGapsData(gapsResult.value);
+      setIsGapsError(false);
+    } else {
+      console.error(
+        "Failed to fetch knowledge gaps from backend:",
+        gapsResult.reason
+      );
+      setIsGapsError(true);
+    }
+
+    setIsLoading(false);
+  }, []);
+
+  useEffect(() => {
+    loadDashboard();
+  }, [loadDashboard]);
 
   const hasQueueItems = Boolean(reviewQueue && reviewQueue.items.length > 0);
   const nextReviewItem = hasQueueItems ? reviewQueue!.items[0] : null;
@@ -86,7 +111,8 @@ export default async function DashboardPage() {
             Ready for your next review?
           </h1>
           <p className="text-sm text-indigo-100/90 mt-1 max-w-xl">
-            Focus on high-priority concepts and reinforce weak knowledge gaps to build long-term retention.
+            Focus on high-priority concepts and reinforce weak knowledge gaps to
+            build long-term retention.
           </p>
         </div>
 
@@ -111,7 +137,14 @@ export default async function DashboardPage() {
       {/* Main Grid: Next Review Hero + Mastery Overview */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2">
-          {isQueueError ? (
+          {isLoading ? (
+            <div className="h-full min-h-[220px] rounded-2xl bg-card border border-border p-8 shadow-cockpit flex flex-col items-center justify-center text-center space-y-3">
+              <div className="w-8 h-8 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+              <p className="text-xs text-muted-foreground font-medium">
+                Loading prioritized review queue...
+              </p>
+            </div>
+          ) : isQueueError ? (
             <div className="h-full rounded-2xl bg-card border border-border p-8 shadow-cockpit flex flex-col items-center justify-center text-center">
               <div className="w-12 h-12 rounded-2xl bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center mb-3">
                 <AlertCircle className="w-6 h-6" />
@@ -119,9 +152,18 @@ export default async function DashboardPage() {
               <h3 className="text-base font-bold text-foreground mb-1">
                 Review data is temporarily unavailable
               </h3>
-              <p className="text-xs text-muted-foreground max-w-sm">
-                Could not reach the FastAPI study engine backend. Verify that local server is running at http://127.0.0.1:8001.
+              <p className="text-xs text-muted-foreground max-w-sm mb-4">
+                Could not reach the RecallForge study engine API. Check your
+                connection or backend server status.
               </p>
+              <button
+                type="button"
+                onClick={loadDashboard}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-primary text-primary-foreground text-xs font-semibold hover:bg-primary-hover transition-colors cursor-pointer"
+              >
+                <RotateCw className="w-3.5 h-3.5" />
+                <span>Retry</span>
+              </button>
             </div>
           ) : nextReviewItem ? (
             <NextReviewCard item={nextReviewItem} />
@@ -134,7 +176,8 @@ export default async function DashboardPage() {
                 All caught up on reviews!
               </h3>
               <p className="text-xs text-muted-foreground max-w-sm mb-4">
-                No concepts are currently due for spaced repetition. Complete a new study challenge to add concepts to your queue.
+                No concepts are currently due for spaced repetition. Complete a
+                new study challenge to add concepts to your queue.
               </p>
               <Link
                 href="/challenges"
@@ -148,7 +191,14 @@ export default async function DashboardPage() {
         </div>
 
         <div>
-          {isProgressError || !progressData ? (
+          {isLoading ? (
+            <div className="h-full min-h-[220px] rounded-2xl bg-card border border-border p-6 shadow-cockpit flex flex-col items-center justify-center text-center space-y-3">
+              <div className="w-7 h-7 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+              <p className="text-xs text-muted-foreground font-medium">
+                Loading mastery breakdown...
+              </p>
+            </div>
+          ) : isProgressError || !progressData ? (
             <div className="h-full rounded-2xl bg-card border border-border p-6 shadow-cockpit flex flex-col items-center justify-center text-center">
               <div className="w-10 h-10 rounded-2xl bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center mb-2.5">
                 <AlertCircle className="w-5 h-5" />
@@ -172,7 +222,13 @@ export default async function DashboardPage() {
           title="Active Knowledge Gaps"
           subtitle="Key concepts requiring targeted reinforcement based on recent challenge attempts"
         />
-        {isGapsError ? (
+        {isLoading ? (
+          <div className="rounded-2xl bg-card border border-border p-8 shadow-cockpit text-center">
+            <p className="text-xs text-muted-foreground font-medium">
+              Loading active knowledge gaps...
+            </p>
+          </div>
+        ) : isGapsError ? (
           <div className="rounded-2xl bg-card border border-border p-6 shadow-cockpit text-center">
             <p className="text-sm font-semibold text-muted-foreground">
               Knowledge gap data is temporarily unavailable.
@@ -187,7 +243,8 @@ export default async function DashboardPage() {
               No recurring knowledge gaps detected yet.
             </h4>
             <p className="text-xs text-muted-foreground max-w-md mx-auto">
-              As you complete study challenges and reviews, any recurring misconceptions will be surfaced here for targeted reinforcement.
+              As you complete study challenges and reviews, any recurring
+              misconceptions will be surfaced here for targeted reinforcement.
             </p>
           </div>
         ) : (
@@ -208,7 +265,13 @@ export default async function DashboardPage() {
           title="Spaced Repetition Queue"
           subtitle="Concepts sorted by decay schedule and review urgency"
         />
-        {isQueueError ? (
+        {isLoading ? (
+          <div className="rounded-2xl bg-card border border-border p-6 shadow-cockpit text-center">
+            <p className="text-xs text-muted-foreground font-medium">
+              Loading queue preview...
+            </p>
+          </div>
+        ) : isQueueError ? (
           <div className="rounded-2xl bg-card border border-border p-6 shadow-cockpit text-center">
             <p className="text-sm font-semibold text-muted-foreground">
               Review data is temporarily unavailable.

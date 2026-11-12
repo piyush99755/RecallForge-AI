@@ -16,8 +16,8 @@ import {
   UploadDocumentResponse,
 } from "./types";
 
-const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_BASE_URL || "http://127.0.0.1:8001";
+export const ACCESS_TOKEN_STORAGE_KEY = "recallforge_access_token";
+export const AUTH_STATE_CHANGE_EVENT = "recallforge:auth-change";
 
 export class ApiError extends Error {
   status: number;
@@ -29,22 +29,139 @@ export class ApiError extends Error {
   }
 }
 
+export function resolveApiBaseUrl(): string {
+  const configured = process.env.NEXT_PUBLIC_API_BASE_URL?.trim().replace(
+    /\/+$/,
+    ""
+  );
+  return configured || "http://127.0.0.1:8001";
+}
+
+export function getStoredAccessToken(): string | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+  try {
+    const token = window.localStorage.getItem(ACCESS_TOKEN_STORAGE_KEY);
+    return token && token.trim() ? token.trim() : null;
+  } catch {
+    return null;
+  }
+}
+
+export function setStoredAccessToken(token: string): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+  const cleaned = token.trim();
+  if (!cleaned) {
+    return;
+  }
+  window.localStorage.setItem(ACCESS_TOKEN_STORAGE_KEY, cleaned);
+  window.dispatchEvent(
+    new CustomEvent(AUTH_STATE_CHANGE_EVENT, {
+      detail: { authenticated: true },
+    })
+  );
+}
+
+export function clearStoredAccessToken(reason?: string): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+  window.localStorage.removeItem(ACCESS_TOKEN_STORAGE_KEY);
+  window.dispatchEvent(
+    new CustomEvent(AUTH_STATE_CHANGE_EVENT, {
+      detail: { authenticated: false, reason },
+    })
+  );
+}
+
+async function parseErrorDetail(response: Response): Promise<string> {
+  let errorDetail = response.statusText || `HTTP ${response.status}`;
+  try {
+    const errJson = await response.json();
+    if (errJson?.detail) {
+      errorDetail =
+        typeof errJson.detail === "string"
+          ? errJson.detail
+          : JSON.stringify(errJson.detail);
+    }
+  } catch {
+    // Ignore JSON parse errors for non-JSON responses
+  }
+  return errorDetail;
+}
+
+async function apiFetch(
+  pathOrUrl: string,
+  init: RequestInit = {},
+  customToken?: string
+): Promise<Response> {
+  const baseUrl = resolveApiBaseUrl();
+  const url = pathOrUrl.startsWith("http")
+    ? pathOrUrl
+    : `${baseUrl}${pathOrUrl.startsWith("/") ? "" : "/"}${pathOrUrl}`;
+
+  const headers = new Headers(init.headers || {});
+  if (!headers.has("Accept")) {
+    headers.set("Accept", "application/json");
+  }
+
+  const token = customToken !== undefined ? customToken.trim() : getStoredAccessToken();
+  if (token) {
+    headers.set("Authorization", `Bearer ${token}`);
+  }
+
+  const response = await fetch(url, {
+    ...init,
+    headers,
+  });
+
+  if (response.status === 401 && customToken === undefined) {
+    const detail = await parseErrorDetail(response);
+    clearStoredAccessToken(detail);
+    throw new ApiError(detail, 401);
+  }
+
+  return response;
+}
+
+/**
+ * Verifies a personal access token against GET /auth/verify before persisting.
+ */
+export async function verifyAccessToken(token: string): Promise<boolean> {
+  const cleaned = token.trim();
+  if (!cleaned) {
+    throw new ApiError("Please enter a personal access token.", 400);
+  }
+
+  const response = await apiFetch(
+    "/auth/verify",
+    { cache: "no-store" },
+    cleaned
+  );
+
+  if (!response.ok) {
+    const detail = await parseErrorDetail(response);
+    throw new ApiError(detail, response.status);
+  }
+
+  return true;
+}
+
 /**
  * Fetches the list of available projects from FastAPI endpoint GET /projects
  */
 export async function getProjects(): Promise<ProjectListResponse> {
-  const url = `${API_BASE_URL}/projects`;
-
-  const response = await fetch(url, {
+  const response = await apiFetch("/projects", {
     cache: "no-store",
-    headers: {
-      Accept: "application/json",
-    },
   });
 
   if (!response.ok) {
+    const errorDetail = await parseErrorDetail(response);
     throw new ApiError(
-      `Failed to fetch projects (${response.status}: ${response.statusText})`,
+      `Failed to fetch projects (${response.status}: ${errorDetail})`,
       response.status
     );
   }
@@ -59,21 +176,19 @@ export async function getProjects(): Promise<ProjectListResponse> {
 export async function getDocuments(
   projectId?: string
 ): Promise<DocumentListResponse> {
-  const url = new URL(`${API_BASE_URL}/documents`);
+  const params = new URLSearchParams();
   if (projectId && projectId !== "all") {
-    url.searchParams.set("project_id", projectId);
+    params.set("project_id", projectId);
   }
-
-  const response = await fetch(url.toString(), {
+  const query = params.toString();
+  const response = await apiFetch(`/documents${query ? `?${query}` : ""}`, {
     cache: "no-store",
-    headers: {
-      Accept: "application/json",
-    },
   });
 
   if (!response.ok) {
+    const errorDetail = await parseErrorDetail(response);
     throw new ApiError(
-      `Failed to fetch documents (${response.status}: ${response.statusText})`,
+      `Failed to fetch documents (${response.status}: ${errorDetail})`,
       response.status
     );
   }
@@ -88,20 +203,22 @@ export async function getReviewQueue(
   projectId?: string,
   documentId?: string
 ): Promise<ReviewQueueResponse> {
-  const url = new URL(`${API_BASE_URL}/learning/review-queue`);
-  if (projectId) url.searchParams.set("project_id", projectId);
-  if (documentId) url.searchParams.set("document_id", documentId);
+  const params = new URLSearchParams();
+  if (projectId) params.set("project_id", projectId);
+  if (documentId) params.set("document_id", documentId);
+  const query = params.toString();
 
-  const response = await fetch(url.toString(), {
-    cache: "no-store",
-    headers: {
-      Accept: "application/json",
-    },
-  });
+  const response = await apiFetch(
+    `/learning/review-queue${query ? `?${query}` : ""}`,
+    {
+      cache: "no-store",
+    }
+  );
 
   if (!response.ok) {
+    const errorDetail = await parseErrorDetail(response);
     throw new ApiError(
-      `Failed to fetch review queue (${response.status}: ${response.statusText})`,
+      `Failed to fetch review queue (${response.status}: ${errorDetail})`,
       response.status
     );
   }
@@ -116,29 +233,14 @@ export async function getReviewQueue(
 export async function uploadDocument(
   formData: FormData
 ): Promise<UploadDocumentResponse> {
-  const url = `${API_BASE_URL}/documents/upload`;
-
-  const response = await fetch(url, {
+  const response = await apiFetch("/documents/upload", {
     method: "POST",
     body: formData,
-    // Note: Do NOT set Content-Type header when sending FormData!
-    // The browser sets multipart/form-data with proper boundary automatically.
+    // Do NOT set Content-Type header when sending FormData; browser sets boundary automatically.
   });
 
   if (!response.ok) {
-    let errorDetail = response.statusText;
-    try {
-      const errJson = await response.json();
-      if (errJson.detail) {
-        errorDetail =
-          typeof errJson.detail === "string"
-            ? errJson.detail
-            : JSON.stringify(errJson.detail);
-      }
-    } catch {
-      // Ignore JSON parse errors for non-JSON response body
-    }
-
+    const errorDetail = await parseErrorDetail(response);
     throw new ApiError(
       `Document upload failed (${response.status}: ${errorDetail})`,
       response.status
@@ -154,29 +256,15 @@ export async function uploadDocument(
 export async function deleteDocument(
   documentId: string
 ): Promise<DeleteDocumentResponse> {
-  const url = `${API_BASE_URL}/documents/${encodeURIComponent(documentId)}`;
-
-  const response = await fetch(url, {
-    method: "DELETE",
-    headers: {
-      Accept: "application/json",
-    },
-  });
+  const response = await apiFetch(
+    `/documents/${encodeURIComponent(documentId)}`,
+    {
+      method: "DELETE",
+    }
+  );
 
   if (!response.ok) {
-    let errorDetail = response.statusText;
-    try {
-      const errJson = await response.json();
-      if (errJson.detail) {
-        errorDetail =
-          typeof errJson.detail === "string"
-            ? errJson.detail
-            : JSON.stringify(errJson.detail);
-      }
-    } catch {
-      // Ignore JSON parse errors
-    }
-
+    const errorDetail = await parseErrorDetail(response);
     throw new ApiError(
       `Document deletion failed (${response.status}: ${errorDetail})`,
       response.status
@@ -192,31 +280,15 @@ export async function deleteDocument(
 export async function retryDocumentVersion(
   documentVersionId: string
 ): Promise<RetryDocumentVersionResponse> {
-  const url = `${API_BASE_URL}/documents/versions/${encodeURIComponent(
-    documentVersionId
-  )}/retry`;
-
-  const response = await fetch(url, {
-    method: "POST",
-    headers: {
-      Accept: "application/json",
-    },
-  });
+  const response = await apiFetch(
+    `/documents/versions/${encodeURIComponent(documentVersionId)}/retry`,
+    {
+      method: "POST",
+    }
+  );
 
   if (!response.ok) {
-    let errorDetail = response.statusText;
-    try {
-      const errJson = await response.json();
-      if (errJson.detail) {
-        errorDetail =
-          typeof errJson.detail === "string"
-            ? errJson.detail
-            : JSON.stringify(errJson.detail);
-      }
-    } catch {
-      // Ignore JSON parse errors
-    }
-
+    const errorDetail = await parseErrorDetail(response);
     throw new ApiError(
       `Document retry failed (${response.status}: ${errorDetail})`,
       response.status
@@ -232,31 +304,16 @@ export async function retryDocumentVersion(
 export async function askRecallForge(
   payload: AskRequest
 ): Promise<AskResponse> {
-  const url = `${API_BASE_URL}/ask`;
-
-  const response = await fetch(url, {
+  const response = await apiFetch("/ask", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Accept: "application/json",
     },
     body: JSON.stringify(payload),
   });
 
   if (!response.ok) {
-    let errorDetail = response.statusText;
-    try {
-      const errJson = await response.json();
-      if (errJson.detail) {
-        errorDetail =
-          typeof errJson.detail === "string"
-            ? errJson.detail
-            : JSON.stringify(errJson.detail);
-      }
-    } catch {
-      // Ignore JSON parse errors for non-JSON response body
-    }
-
+    const errorDetail = await parseErrorDetail(response);
     throw new ApiError(
       `Ask request failed (${response.status}: ${errorDetail})`,
       response.status
@@ -273,20 +330,22 @@ export async function getLearningProgress(
   projectId?: string,
   documentId?: string
 ): Promise<LearningProgressResponse> {
-  const url = new URL(`${API_BASE_URL}/learning/progress`);
-  if (projectId) url.searchParams.set("project_id", projectId);
-  if (documentId) url.searchParams.set("document_id", documentId);
+  const params = new URLSearchParams();
+  if (projectId) params.set("project_id", projectId);
+  if (documentId) params.set("document_id", documentId);
+  const query = params.toString();
 
-  const response = await fetch(url.toString(), {
-    cache: "no-store",
-    headers: {
-      Accept: "application/json",
-    },
-  });
+  const response = await apiFetch(
+    `/learning/progress${query ? `?${query}` : ""}`,
+    {
+      cache: "no-store",
+    }
+  );
 
   if (!response.ok) {
+    const errorDetail = await parseErrorDetail(response);
     throw new ApiError(
-      `Failed to fetch learning progress (${response.status}: ${response.statusText})`,
+      `Failed to fetch learning progress (${response.status}: ${errorDetail})`,
       response.status
     );
   }
@@ -301,20 +360,22 @@ export async function getKnowledgeGaps(
   projectId?: string,
   documentId?: string
 ): Promise<KnowledgeGapResponse> {
-  const url = new URL(`${API_BASE_URL}/learning/gaps`);
-  if (projectId) url.searchParams.set("project_id", projectId);
-  if (documentId) url.searchParams.set("document_id", documentId);
+  const params = new URLSearchParams();
+  if (projectId) params.set("project_id", projectId);
+  if (documentId) params.set("document_id", documentId);
+  const query = params.toString();
 
-  const response = await fetch(url.toString(), {
-    cache: "no-store",
-    headers: {
-      Accept: "application/json",
-    },
-  });
+  const response = await apiFetch(
+    `/learning/gaps${query ? `?${query}` : ""}`,
+    {
+      cache: "no-store",
+    }
+  );
 
   if (!response.ok) {
+    const errorDetail = await parseErrorDetail(response);
     throw new ApiError(
-      `Failed to fetch knowledge gaps (${response.status}: ${response.statusText})`,
+      `Failed to fetch knowledge gaps (${response.status}: ${errorDetail})`,
       response.status
     );
   }
@@ -328,31 +389,16 @@ export async function getKnowledgeGaps(
 export async function getNextReviewChallenge(
   payload?: ReviewNextRequest
 ): Promise<ChallengeResponse> {
-  const url = `${API_BASE_URL}/learning/review-next`;
-
-  const response = await fetch(url, {
+  const response = await apiFetch("/learning/review-next", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Accept: "application/json",
     },
     body: JSON.stringify(payload || {}),
   });
 
   if (!response.ok) {
-    let errorDetail = response.statusText;
-    try {
-      const errJson = await response.json();
-      if (errJson.detail) {
-        errorDetail =
-          typeof errJson.detail === "string"
-            ? errJson.detail
-            : JSON.stringify(errJson.detail);
-      }
-    } catch {
-      // Ignore JSON parse errors
-    }
-
+    const errorDetail = await parseErrorDetail(response);
     throw new ApiError(
       `Review challenge generation failed (${response.status}: ${errorDetail})`,
       response.status
@@ -368,31 +414,16 @@ export async function getNextReviewChallenge(
 export async function generateChallenge(
   payload: ChallengeRequest
 ): Promise<ChallengeResponse> {
-  const url = `${API_BASE_URL}/challenge`;
-
-  const response = await fetch(url, {
+  const response = await apiFetch("/challenge", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Accept: "application/json",
     },
     body: JSON.stringify(payload),
   });
 
   if (!response.ok) {
-    let errorDetail = response.statusText;
-    try {
-      const errJson = await response.json();
-      if (errJson.detail) {
-        errorDetail =
-          typeof errJson.detail === "string"
-            ? errJson.detail
-            : JSON.stringify(errJson.detail);
-      }
-    } catch {
-      // Ignore JSON parse errors
-    }
-
+    const errorDetail = await parseErrorDetail(response);
     throw new ApiError(
       `Challenge generation failed (${response.status}: ${errorDetail})`,
       response.status
@@ -408,31 +439,16 @@ export async function generateChallenge(
 export async function evaluateChallenge(
   payload: ChallengeEvaluationRequest
 ): Promise<ChallengeEvaluationResponse> {
-  const url = `${API_BASE_URL}/challenge/evaluate`;
-
-  const response = await fetch(url, {
+  const response = await apiFetch("/challenge/evaluate", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Accept: "application/json",
     },
     body: JSON.stringify(payload),
   });
 
   if (!response.ok) {
-    let errorDetail = response.statusText;
-    try {
-      const errJson = await response.json();
-      if (errJson.detail) {
-        errorDetail =
-          typeof errJson.detail === "string"
-            ? errJson.detail
-            : JSON.stringify(errJson.detail);
-      }
-    } catch {
-      // Ignore JSON parse errors
-    }
-
+    const errorDetail = await parseErrorDetail(response);
     throw new ApiError(
       `Challenge evaluation failed (${response.status}: ${errorDetail})`,
       response.status
