@@ -1,5 +1,7 @@
 import React from "react";
+import Link from "next/link";
 import { KnowledgeGapItem } from "@/lib/types";
+import { formatConceptName } from "@/lib/formatters";
 import { AlertCircle, HelpCircle, ArrowRight } from "lucide-react";
 
 interface KnowledgeGapCardProps {
@@ -7,6 +9,8 @@ interface KnowledgeGapCardProps {
 }
 
 export function KnowledgeGapCard({ gap }: KnowledgeGapCardProps) {
+  const formattedConcept = formatConceptName(gap.concept);
+
   return (
     <div className="rounded-2xl bg-card border border-border p-5 shadow-cockpit hover:shadow-cockpit-hover transition-all flex flex-col justify-between group">
       <div>
@@ -29,7 +33,7 @@ export function KnowledgeGapCard({ gap }: KnowledgeGapCardProps) {
         {/* Concept tag */}
         <div className="inline-flex items-center gap-1 text-xs text-muted-foreground font-medium mb-3">
           <HelpCircle className="w-3.5 h-3.5 text-primary" />
-          <span>Concept: {gap.concept}</span>
+          <span>Concept: {formattedConcept}</span>
         </div>
 
         {/* Description / Reinforcement Message */}
@@ -39,10 +43,13 @@ export function KnowledgeGapCard({ gap }: KnowledgeGapCardProps) {
       </div>
 
       {/* Action link */}
-      <div className="mt-4 pt-3 border-t border-border/50 flex items-center justify-between text-xs font-semibold text-primary group-hover:underline">
+      <Link
+        href="/review"
+        className="mt-4 pt-3 border-t border-border/50 flex items-center justify-between text-xs font-semibold text-primary group-hover:underline"
+      >
         <span>Target this gap</span>
         <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
-      </div>
+      </Link>
     </div>
   );
 }

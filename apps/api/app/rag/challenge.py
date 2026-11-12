@@ -1,4 +1,5 @@
 import json
+import logging
 from dataclasses import dataclass
 
 from google import genai
@@ -6,6 +7,8 @@ from google.genai import types
 
 from app.core.config import get_settings
 from app.rag.context import RagContext
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -177,23 +180,25 @@ Evidence:
 
     concept = data.get("concept")
 
-    if not isinstance(concept, str) or not concept.strip():
-        raise ValueError(
-            "Challenge generation returned a missing or invalid concept"
+    if normalized_target_concept is not None:
+        raw_concept = (
+            concept.strip().lower()
+            if isinstance(concept, str) and concept.strip()
+            else None
         )
-
-    concept = concept.strip().lower()
-
-    if (
-        normalized_target_concept is not None
-        and concept != normalized_target_concept
-    ):
-        raise ValueError(
-            "Generated challenge concept does not match "
-            "the requested review concept: "
-            f"expected '{normalized_target_concept}', "
-            f"got '{concept}'"
-        )
+        if raw_concept != normalized_target_concept:
+            logger.warning(
+                "Generated challenge concept %r did not match requested target_concept %r; locking to target_concept.",
+                raw_concept,
+                normalized_target_concept,
+            )
+        concept = normalized_target_concept
+    else:
+        if not isinstance(concept, str) or not concept.strip():
+            raise ValueError(
+                "Challenge generation returned a missing or invalid concept"
+            )
+        concept = concept.strip().lower()
 
     question = data.get("question")
 

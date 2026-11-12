@@ -1,30 +1,71 @@
 import React from "react";
-import { getReviewQueue } from "@/lib/api";
+import Link from "next/link";
+import {
+  getReviewQueue,
+  getLearningProgress,
+  getKnowledgeGaps,
+} from "@/lib/api";
 
 export const dynamic = "force-dynamic";
-import { ReviewQueueResponse } from "@/lib/types";
+import {
+  ReviewQueueResponse,
+  LearningProgressResponse,
+  KnowledgeGapResponse,
+} from "@/lib/types";
 import { SectionHeading } from "@/components/section-heading";
 import { NextReviewCard } from "@/components/next-review-card";
 import { MasteryCard } from "@/components/mastery-card";
 import { KnowledgeGapCard } from "@/components/knowledge-gap-card";
 import { ReviewQueueCard } from "@/components/review-queue-card";
-import { MOCK_SUMMARY, MOCK_KNOWLEDGE_GAPS } from "@/lib/mock-data";
-import { Flame, Sparkles, CheckCircle2, AlertCircle } from "lucide-react";
+import {
+  BrainCircuit,
+  Sparkles,
+  CheckCircle2,
+  AlertCircle,
+  Trophy,
+} from "lucide-react";
 
 export default async function DashboardPage() {
-  let reviewQueue: ReviewQueueResponse | null = null;
-  let isApiError = false;
+  const [queueResult, progressResult, gapsResult] = await Promise.allSettled([
+    getReviewQueue(),
+    getLearningProgress(),
+    getKnowledgeGaps(),
+  ]);
 
-  try {
-    reviewQueue = await getReviewQueue();
-  } catch (error) {
-    console.error("Failed to fetch review queue from FastAPI backend:", error);
-    isApiError = true;
+  const reviewQueue: ReviewQueueResponse | null =
+    queueResult.status === "fulfilled" ? queueResult.value : null;
+  const isQueueError = queueResult.status === "rejected";
+  if (isQueueError) {
+    console.error(
+      "Failed to fetch review queue from FastAPI backend:",
+      queueResult.reason
+    );
   }
 
-  const hasItems = Boolean(reviewQueue && reviewQueue.items.length > 0);
-  const nextReviewItem = hasItems ? reviewQueue!.items[0] : null;
-  const previewItems = hasItems ? reviewQueue!.items.slice(0, 3) : [];
+  const progressData: LearningProgressResponse | null =
+    progressResult.status === "fulfilled" ? progressResult.value : null;
+  const isProgressError = progressResult.status === "rejected";
+  if (isProgressError) {
+    console.error(
+      "Failed to fetch learning progress from FastAPI backend:",
+      progressResult.reason
+    );
+  }
+
+  const gapsData: KnowledgeGapResponse | null =
+    gapsResult.status === "fulfilled" ? gapsResult.value : null;
+  const isGapsError = gapsResult.status === "rejected";
+  if (isGapsError) {
+    console.error(
+      "Failed to fetch knowledge gaps from FastAPI backend:",
+      gapsResult.reason
+    );
+  }
+
+  const hasQueueItems = Boolean(reviewQueue && reviewQueue.items.length > 0);
+  const nextReviewItem = hasQueueItems ? reviewQueue!.items[0] : null;
+  const previewItems = hasQueueItems ? reviewQueue!.items.slice(0, 3) : [];
+  const topGaps = gapsData ? gapsData.items.slice(0, 4) : [];
 
   return (
     <div className="space-y-8">
@@ -49,21 +90,28 @@ export default async function DashboardPage() {
           </p>
         </div>
 
-        <div className="flex items-center gap-3 shrink-0 self-start md:self-center">
-          <div className="flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-white/10 border border-white/15 text-white backdrop-blur-xs">
-            <Flame className="w-5 h-5 text-amber-400" />
-            <div>
-              <p className="text-xs text-indigo-200">Streak Momentum</p>
-              <p className="text-sm font-bold">5 Days Active</p>
+        {progressData && (
+          <div className="flex items-center gap-3 shrink-0 self-start md:self-center">
+            <div className="flex items-center gap-2.5 px-4 py-2.5 rounded-2xl bg-white/10 border border-white/15 text-white backdrop-blur-xs">
+              <BrainCircuit className="w-5 h-5 text-indigo-300" />
+              <div>
+                <p className="text-xs text-indigo-200">Tracked Concepts</p>
+                <p className="text-sm font-bold">
+                  {progressData.summary.total_concepts}{" "}
+                  {progressData.summary.total_concepts === 1
+                    ? "Concept"
+                    : "Concepts"}
+                </p>
+              </div>
             </div>
           </div>
-        </div>
+        )}
       </div>
 
       {/* Main Grid: Next Review Hero + Mastery Overview */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2">
-          {isApiError ? (
+          {isQueueError ? (
             <div className="h-full rounded-2xl bg-card border border-border p-8 shadow-cockpit flex flex-col items-center justify-center text-center">
               <div className="w-12 h-12 rounded-2xl bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center mb-3">
                 <AlertCircle className="w-6 h-6" />
@@ -85,15 +133,36 @@ export default async function DashboardPage() {
               <h3 className="text-base font-bold text-foreground mb-1">
                 All caught up on reviews!
               </h3>
-              <p className="text-xs text-muted-foreground max-w-sm">
+              <p className="text-xs text-muted-foreground max-w-sm mb-4">
                 No concepts are currently due for spaced repetition. Complete a new study challenge to add concepts to your queue.
               </p>
+              <Link
+                href="/challenges"
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-primary text-primary-foreground text-xs font-semibold hover:bg-primary-hover transition-colors shadow-sm"
+              >
+                <Trophy className="w-3.5 h-3.5" />
+                <span>Try a Study Challenge</span>
+              </Link>
             </div>
           )}
         </div>
 
         <div>
-          <MasteryCard summary={MOCK_SUMMARY} />
+          {isProgressError || !progressData ? (
+            <div className="h-full rounded-2xl bg-card border border-border p-6 shadow-cockpit flex flex-col items-center justify-center text-center">
+              <div className="w-10 h-10 rounded-2xl bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center mb-2.5">
+                <AlertCircle className="w-5 h-5" />
+              </div>
+              <h3 className="text-sm font-bold text-foreground mb-1">
+                Mastery summary unavailable
+              </h3>
+              <p className="text-xs text-muted-foreground">
+                Could not load concept mastery breakdown from backend.
+              </p>
+            </div>
+          ) : (
+            <MasteryCard summary={progressData.summary} />
+          )}
         </div>
       </div>
 
@@ -103,11 +172,34 @@ export default async function DashboardPage() {
           title="Active Knowledge Gaps"
           subtitle="Key concepts requiring targeted reinforcement based on recent challenge attempts"
         />
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {MOCK_KNOWLEDGE_GAPS.map((gap) => (
-            <KnowledgeGapCard key={gap.gap_key} gap={gap} />
-          ))}
-        </div>
+        {isGapsError ? (
+          <div className="rounded-2xl bg-card border border-border p-6 shadow-cockpit text-center">
+            <p className="text-sm font-semibold text-muted-foreground">
+              Knowledge gap data is temporarily unavailable.
+            </p>
+          </div>
+        ) : topGaps.length === 0 ? (
+          <div className="rounded-2xl bg-card border border-border p-8 shadow-cockpit text-center">
+            <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center mx-auto mb-3">
+              <CheckCircle2 className="w-6 h-6" />
+            </div>
+            <h4 className="text-base font-bold text-foreground mb-1">
+              No recurring knowledge gaps detected yet.
+            </h4>
+            <p className="text-xs text-muted-foreground max-w-md mx-auto">
+              As you complete study challenges and reviews, any recurring misconceptions will be surfaced here for targeted reinforcement.
+            </p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {topGaps.map((gap, index) => (
+              <KnowledgeGapCard
+                key={`${gap.concept}-${gap.gap_key}-${index}`}
+                gap={gap}
+              />
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Spaced Repetition Queue Preview */}
@@ -116,7 +208,7 @@ export default async function DashboardPage() {
           title="Spaced Repetition Queue"
           subtitle="Concepts sorted by decay schedule and review urgency"
         />
-        {isApiError ? (
+        {isQueueError ? (
           <div className="rounded-2xl bg-card border border-border p-6 shadow-cockpit text-center">
             <p className="text-sm font-semibold text-muted-foreground">
               Review data is temporarily unavailable.

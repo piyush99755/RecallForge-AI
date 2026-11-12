@@ -154,6 +154,7 @@ export interface AskResponse {
 export interface ReviewNextRequest {
   project_id?: string | null;
   document_id?: string | null;
+  concept?: string | null;
 }
 
 export interface ChallengeRequest {

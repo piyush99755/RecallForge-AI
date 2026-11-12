@@ -47,46 +47,88 @@ def build_review_targets(
 
     rows = db.scalars(statement).all()
 
+    if not rows:
+        return []
+
+    concepts = {row.concept for row in rows}
+    gap_count = func.count(
+        ChallengeAttemptGap.id
+    ).label("occurrences")
+
+    gap_statement = (
+        select(
+            KnowledgeGap,
+            gap_count,
+        )
+        .join(
+            ChallengeAttemptGap,
+            ChallengeAttemptGap.knowledge_gap_id
+            == KnowledgeGap.id,
+        )
+        .where(
+            KnowledgeGap.concept.in_(concepts),
+        )
+    )
+
+    if project_id is not None:
+        gap_statement = gap_statement.where(
+            KnowledgeGap.project_id == project_id
+        )
+
+    if document_id is not None:
+        gap_statement = gap_statement.where(
+            KnowledgeGap.document_id == document_id
+        )
+
+    gap_statement = (
+        gap_statement
+        .group_by(
+            KnowledgeGap.id
+        )
+        .order_by(
+            gap_count.desc()
+        )
+    )
+
+    gap_rows = db.execute(gap_statement).all()
+
+    top_gap_by_scope: dict[
+        tuple[UUID | None, UUID | None, str],
+        tuple[KnowledgeGap, int],
+    ] = {}
+
+    for knowledge_gap, occurrences in gap_rows:
+        scope_key = (
+            knowledge_gap.project_id,
+            knowledge_gap.document_id,
+            knowledge_gap.concept,
+        )
+        if scope_key not in top_gap_by_scope:
+            top_gap_by_scope[scope_key] = (
+                knowledge_gap,
+                int(occurrences),
+            )
+
     targets: list[ReviewTarget] = []
 
     for row in rows:
-        gap_count = func.count(
-            ChallengeAttemptGap.id
-        ).label("occurrences")
-
-        gap_statement = (
-            select(
-                KnowledgeGap,
-                gap_count,
-            )
-            .join(
-                ChallengeAttemptGap,
-                ChallengeAttemptGap.knowledge_gap_id
-                == KnowledgeGap.id,
-            )
-            .where(
-                KnowledgeGap.concept == row.concept,
-                KnowledgeGap.project_id == row.project_id,
-                KnowledgeGap.document_id == row.document_id,
-            )
-            .group_by(
-                KnowledgeGap.id
-            )
-            .order_by(
-                gap_count.desc()
-            )
+        scope_key = (
+            row.project_id,
+            row.document_id,
+            row.concept,
         )
+        top_gap_entry = top_gap_by_scope.get(scope_key)
 
-        gap_row = db.execute(
-            gap_statement
-        ).first()
-
-        top_gap = None
-        top_gap_occurrences = 0
-
-        if gap_row is not None:
-            top_gap = gap_row[0]
-            top_gap_occurrences = gap_row[1]
+        top_gap = (
+            top_gap_entry[0]
+            if top_gap_entry is not None
+            else None
+        )
+        top_gap_occurrences = (
+            top_gap_entry[1]
+            if top_gap_entry is not None
+            else 0
+        )
 
         targets.append(
             ReviewTarget(
@@ -105,6 +147,7 @@ def build_review_targets(
     )
 
     return targets
+
 
 def calculate_review_priority(row: ConceptProgress) -> float:
     mastery_weights = {

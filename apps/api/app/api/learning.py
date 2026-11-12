@@ -1,3 +1,4 @@
+import logging
 from datetime import datetime, timezone
 from uuid import UUID
 
@@ -5,6 +6,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
+
+logger = logging.getLogger(__name__)
 
 from app.api.challenge import (
     ChallengeResponse,
@@ -77,6 +80,7 @@ class LearningProgressResponse(BaseModel):
 class ReviewNextRequest(BaseModel):
     project_id: UUID | None = None
     document_id: UUID | None = None
+    concept: str | None = None
 
 
 class KnowledgeGapItem(BaseModel):
@@ -349,93 +353,158 @@ def review_next_concept(
             detail="No learner progress is available yet.",
         )
 
-    target = targets[0]
-    progress = target.progress
-
-    query = progress.concept.replace("_", " ")
-
-    candidates = hybrid_search(
-        db=db,
-        query=query,
-        limit=10,
-        project_id=progress.project_id,
-        document_id=progress.document_id,
+    requested_concept = (
+        payload.concept.strip().lower()
+        if payload.concept and payload.concept.strip()
+        else None
     )
 
-    confidence = evaluate_retrieval_confidence(
-        candidates
-    )
+    if requested_concept is not None:
+        matching_targets = [
+            t
+            for t in targets
+            if t.progress.concept.strip().lower() == requested_concept
+        ]
+        if not matching_targets:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Requested review concept '{requested_concept}' was not found in the review queue.",
+            )
+        remaining_targets = [
+            t
+            for t in targets
+            if t.progress.concept.strip().lower() != requested_concept
+        ]
+        ordered_targets = matching_targets + remaining_targets
+    else:
+        ordered_targets = targets
 
-    if not confidence.sufficient:
-        raise HTTPException(
-            status_code=422,
-            detail=(
-                "Could not find sufficiently relevant source material "
-                "for the recommended concept."
-            ),
+    for target in ordered_targets:
+        progress = target.progress
+        concept_words = progress.concept.replace("_", " ").strip()
+        primary_query = concept_words
+        active_query = primary_query
+
+        candidates = hybrid_search(
+            db=db,
+            query=primary_query,
+            limit=10,
+            project_id=progress.project_id,
+            document_id=progress.document_id,
         )
 
-    reranked = rerank_results(
-        query=query,
-        candidates=candidates,
-        limit=3,
-    )
+        confidence = evaluate_retrieval_confidence(candidates)
 
-    context = build_rag_context(
-        reranked
-    )
+        if not confidence.sufficient:
+            topic_words = progress.topic.replace("_", " ").strip()
+            fallback_query = f"{topic_words} {concept_words}".strip()
 
-    target_gap = (
-        target.top_gap.gap_key
-        if target.top_gap is not None
-        else None
-    )
+            if fallback_query.lower() != primary_query.lower():
+                logger.info(
+                    "Review target '%s' had insufficient confidence (reason=%s, distance=%s) for primary query '%s'; retrying with enriched query '%s'.",
+                    progress.concept,
+                    confidence.reason,
+                    confidence.best_semantic_distance,
+                    primary_query,
+                    fallback_query,
+                )
+                candidates = hybrid_search(
+                    db=db,
+                    query=fallback_query,
+                    limit=10,
+                    project_id=progress.project_id,
+                    document_id=progress.document_id,
+                )
+                confidence = evaluate_retrieval_confidence(candidates)
+                if confidence.sufficient:
+                    active_query = fallback_query
 
-    target_gap_description = (
-        target.top_gap.description
-        if target.top_gap is not None
-        else None
-    )
-
-    challenge = generate_challenge_question(
-        context=context,
-        target_concept=progress.concept,
-        target_gap=target_gap,
-        target_gap_description=target_gap_description,
-    )
-
-    stored_challenge = StudyChallenge(
-        project_id=progress.project_id,
-        document_id=progress.document_id,
-        topic=progress.topic,
-        concept=challenge.concept,
-        question=challenge.question,
-        expected_answer=challenge.expected_answer,
-        explanation=challenge.explanation,
-    )
-
-    try:
-        db.add(stored_challenge)
-        db.commit()
-        db.refresh(stored_challenge)
-    except Exception:
-        db.rollback()
-        raise
-
-    return ChallengeResponse(
-        challenge_id=stored_challenge.id,
-        topic=stored_challenge.topic,
-        concept=stored_challenge.concept,
-        question=stored_challenge.question,
-        sources=[
-            ChallengeSourceResponse(
-                source_id=source.source_id,
-                chunk_id=source.chunk_id,
-                document_title=source.document_title,
-                section_title=source.section_title,
-                page_start=source.page_start,
-                page_end=source.page_end,
+        if not confidence.sufficient:
+            logger.warning(
+                "Skipping review target '%s' (topic='%s'): insufficient retrieval confidence (reason=%s, best_distance=%s).",
+                progress.concept,
+                progress.topic,
+                confidence.reason,
+                confidence.best_semantic_distance,
             )
-            for source in context.sources
-        ],
+            continue
+
+        try:
+            reranked = rerank_results(
+                query=active_query,
+                candidates=candidates,
+                limit=3,
+            )
+
+            context = build_rag_context(reranked)
+
+            target_gap = (
+                target.top_gap.gap_key
+                if target.top_gap is not None
+                else None
+            )
+
+            target_gap_description = (
+                target.top_gap.description
+                if target.top_gap is not None
+                else None
+            )
+
+            challenge = generate_challenge_question(
+                context=context,
+                target_concept=progress.concept,
+                target_gap=target_gap,
+                target_gap_description=target_gap_description,
+            )
+        except Exception as exc:
+            logger.warning(
+                "Skipping review target '%s' (topic='%s') due to challenge generation failure: %s",
+                progress.concept,
+                progress.topic,
+                exc,
+            )
+            continue
+
+        stored_challenge = StudyChallenge(
+            project_id=progress.project_id,
+            document_id=progress.document_id,
+            topic=progress.topic,
+            concept=challenge.concept,
+            question=challenge.question,
+            expected_answer=challenge.expected_answer,
+            explanation=challenge.explanation,
+        )
+
+        try:
+            db.add(stored_challenge)
+            db.commit()
+            db.refresh(stored_challenge)
+        except Exception:
+            db.rollback()
+            raise
+
+        return ChallengeResponse(
+            challenge_id=stored_challenge.id,
+            topic=stored_challenge.topic,
+            concept=stored_challenge.concept,
+            question=stored_challenge.question,
+            sources=[
+                ChallengeSourceResponse(
+                    source_id=source.source_id,
+                    chunk_id=source.chunk_id,
+                    document_title=source.document_title,
+                    section_title=source.section_title,
+                    page_start=source.page_start,
+                    page_end=source.page_end,
+                )
+                for source in context.sources
+            ],
+        )
+
+    raise HTTPException(
+        status_code=422,
+        detail=(
+            "Could not find sufficiently relevant source material "
+            "for any concept currently in the review queue."
+        ),
     )
