@@ -71,9 +71,13 @@ export interface LearningProgressItem {
   correct_count: number;
   incorrect_count: number;
   mastery_level: MasteryLevel;
+  last_practiced_at?: string | null;
   next_review_at: string | null;
   review_status: ReviewStatus;
 }
+
+export type ProgressSummary = LearningProgressSummary;
+export type ConceptProgressItem = LearningProgressItem;
 
 export interface LearningProgressResponse {
   summary: LearningProgressSummary;

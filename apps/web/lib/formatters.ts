@@ -31,3 +31,21 @@ export function formatMasteryLevel(level: string | null | undefined): string {
   if (!level) return "Unknown";
   return level.charAt(0).toUpperCase() + level.slice(1).toLowerCase();
 }
+
+/**
+ * Formats an ISO date string into a clean localized date (e.g. 'Oct 14, 2026')
+ */
+export function formatDate(dateString: string | null | undefined): string {
+  if (!dateString) return "—";
+  try {
+    const d = new Date(dateString);
+    if (isNaN(d.getTime())) return "—";
+    return d.toLocaleDateString(undefined, {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+  } catch {
+    return "—";
+  }
+}

@@ -63,6 +63,7 @@ class LearningProgressItem(BaseModel):
     correct_count: int
     incorrect_count: int
     mastery_level: str
+    last_practiced_at: datetime | None = None
     next_review_at: datetime | None
     review_status: str
 
@@ -191,6 +192,7 @@ def get_learning_progress(
             correct_count=row.correct_count,
             incorrect_count=row.incorrect_count,
             mastery_level=row.mastery_level,
+            last_practiced_at=row.last_practiced_at,
             next_review_at=row.next_review_at,
             review_status=get_review_status(row),
         )
