@@ -5,10 +5,12 @@ import {
   ChallengeEvaluationResponse,
   ChallengeRequest,
   ChallengeResponse,
+  DeleteDocumentResponse,
   DocumentListResponse,
   KnowledgeGapResponse,
   LearningProgressResponse,
   ProjectListResponse,
+  RetryDocumentVersionResponse,
   ReviewNextRequest,
   ReviewQueueResponse,
   UploadDocumentResponse,
@@ -139,6 +141,84 @@ export async function uploadDocument(
 
     throw new ApiError(
       `Document upload failed (${response.status}: ${errorDetail})`,
+      response.status
+    );
+  }
+
+  return response.json();
+}
+
+/**
+ * Deletes a document from FastAPI endpoint DELETE /documents/{document_id}
+ */
+export async function deleteDocument(
+  documentId: string
+): Promise<DeleteDocumentResponse> {
+  const url = `${API_BASE_URL}/documents/${encodeURIComponent(documentId)}`;
+
+  const response = await fetch(url, {
+    method: "DELETE",
+    headers: {
+      Accept: "application/json",
+    },
+  });
+
+  if (!response.ok) {
+    let errorDetail = response.statusText;
+    try {
+      const errJson = await response.json();
+      if (errJson.detail) {
+        errorDetail =
+          typeof errJson.detail === "string"
+            ? errJson.detail
+            : JSON.stringify(errJson.detail);
+      }
+    } catch {
+      // Ignore JSON parse errors
+    }
+
+    throw new ApiError(
+      `Document deletion failed (${response.status}: ${errorDetail})`,
+      response.status
+    );
+  }
+
+  return response.json();
+}
+
+/**
+ * Retries processing for a failed document version via POST /documents/versions/{document_version_id}/retry
+ */
+export async function retryDocumentVersion(
+  documentVersionId: string
+): Promise<RetryDocumentVersionResponse> {
+  const url = `${API_BASE_URL}/documents/versions/${encodeURIComponent(
+    documentVersionId
+  )}/retry`;
+
+  const response = await fetch(url, {
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+    },
+  });
+
+  if (!response.ok) {
+    let errorDetail = response.statusText;
+    try {
+      const errJson = await response.json();
+      if (errJson.detail) {
+        errorDetail =
+          typeof errJson.detail === "string"
+            ? errJson.detail
+            : JSON.stringify(errJson.detail);
+      }
+    } catch {
+      // Ignore JSON parse errors
+    }
+
+    throw new ApiError(
+      `Document retry failed (${response.status}: ${errorDetail})`,
       response.status
     );
   }

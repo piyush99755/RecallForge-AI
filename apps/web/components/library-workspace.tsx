@@ -1,7 +1,11 @@
 "use client";
 
 import React, { useState, useEffect, useCallback, useRef } from "react";
-import { getDocuments } from "@/lib/api";
+import {
+  getDocuments,
+  deleteDocument,
+  retryDocumentVersion,
+} from "@/lib/api";
 import { DocumentListItem, UploadDocumentResponse } from "@/lib/types";
 import { DocumentUpload } from "./document-upload";
 import { DocumentList } from "./document-list";
@@ -13,7 +17,15 @@ export function LibraryWorkspace() {
   const [isError, setIsError] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
 
-  // Polling state
+  // Action loading states
+  const [deletingDocumentId, setDeletingDocumentId] = useState<string | null>(
+    null
+  );
+  const [retryingVersionId, setRetryingVersionId] = useState<string | null>(
+    null
+  );
+
+  // Polling / action notice state
   const [pollingNotice, setPollingNotice] = useState<string | null>(null);
   const [pollingNoticeType, setPollingNoticeType] = useState<
     "info" | "success" | "error" | "warning"
@@ -21,6 +33,7 @@ export function LibraryWorkspace() {
 
   const pollingTimerRef = useRef<NodeJS.Timeout | null>(null);
   const timeoutTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const activePollingDocIdRef = useRef<string | null>(null);
 
   // 1. Fetch documents callback
   const fetchDocuments = useCallback(async () => {
@@ -54,6 +67,7 @@ export function LibraryWorkspace() {
       clearTimeout(timeoutTimerRef.current);
       timeoutTimerRef.current = null;
     }
+    activePollingDocIdRef.current = null;
   }, []);
 
   // Clean up timers on unmount
@@ -63,25 +77,12 @@ export function LibraryWorkspace() {
     };
   }, [stopPolling]);
 
-  // 4. Handle Upload Success & Start Polling
-  const handleUploadSuccess = useCallback(
-    (uploadRes: UploadDocumentResponse) => {
-      // Immediately refresh documents list
-      fetchDocuments();
-
-      // If existing document returned ready immediately (duplicate)
-      if (uploadRes.processing_status === "ready") {
-        setPollingNotice("Document is ready for study and RAG search.");
-        setPollingNoticeType("success");
-        return;
-      }
-
-      // Start 1.5s polling for background pipeline status transition
+  // Shared 1.5s polling loop for upload & retry
+  const startPollingForDocument = useCallback(
+    (targetDocId: string, initialNotice: string) => {
       stopPolling();
-      const targetDocId = uploadRes.document_id;
-      setPollingNotice(
-        "Background processing active: Ingesting & embedding PDF..."
-      );
+      activePollingDocIdRef.current = targetDocId;
+      setPollingNotice(initialNotice);
       setPollingNoticeType("info");
 
       // 60-second safety timeout guard
@@ -106,7 +107,9 @@ export function LibraryWorkspace() {
           // Terminal Success
           if (status === "ready") {
             stopPolling();
-            setPollingNotice("Processing complete! Document is ready for study.");
+            setPollingNotice(
+              "Processing complete! Document is ready for study."
+            );
             setPollingNoticeType("success");
           }
           // Terminal Failure
@@ -121,6 +124,87 @@ export function LibraryWorkspace() {
       }, 1500);
     },
     [fetchDocuments, stopPolling]
+  );
+
+  // 4. Handle Upload Success & Start Polling
+  const handleUploadSuccess = useCallback(
+    (uploadRes: UploadDocumentResponse) => {
+      fetchDocuments();
+
+      if (uploadRes.processing_status === "ready") {
+        setPollingNotice("Document is ready for study and RAG search.");
+        setPollingNoticeType("success");
+        return;
+      }
+
+      startPollingForDocument(
+        uploadRes.document_id,
+        "Background processing active: Ingesting & embedding PDF..."
+      );
+    },
+    [fetchDocuments, startPollingForDocument]
+  );
+
+  // 5. Handle Document Delete
+  const handleDeleteDocument = useCallback(
+    async (doc: DocumentListItem) => {
+      if (deletingDocumentId) return;
+
+      setDeletingDocumentId(doc.document_id);
+
+      try {
+        await deleteDocument(doc.document_id);
+
+        if (activePollingDocIdRef.current === doc.document_id) {
+          stopPolling();
+        }
+
+        await fetchDocuments();
+        setPollingNotice(`Deleted "${doc.title}" from your Study Library.`);
+        setPollingNoticeType("success");
+      } catch (err) {
+        console.error("Failed to delete document:", err);
+        const msg =
+          err instanceof Error
+            ? err.message
+            : "Failed to delete document from backend.";
+        setPollingNotice(msg);
+        setPollingNoticeType("error");
+      } finally {
+        setDeletingDocumentId(null);
+      }
+    },
+    [deletingDocumentId, fetchDocuments, stopPolling]
+  );
+
+  // 6. Handle Document Retry
+  const handleRetryDocument = useCallback(
+    async (doc: DocumentListItem) => {
+      if (!doc.latest_version_id || retryingVersionId) return;
+
+      setRetryingVersionId(doc.latest_version_id);
+
+      try {
+        await retryDocumentVersion(doc.latest_version_id);
+        await fetchDocuments();
+
+        startPollingForDocument(
+          doc.document_id,
+          `Retrying background processing for "${doc.title}"...`
+        );
+      } catch (err) {
+        console.error("Failed to retry document version:", err);
+        const msg =
+          err instanceof Error
+            ? err.message
+            : "Failed to retry document processing.";
+        setPollingNotice(msg);
+        setPollingNoticeType("error");
+      } finally {
+        setRetryingVersionId(null);
+      }
+    },
+    [retryingVersionId, fetchDocuments, startPollingForDocument]
   );
 
   return (
@@ -171,6 +255,10 @@ export function LibraryWorkspace() {
         isError={isError}
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
+        onDeleteDocument={handleDeleteDocument}
+        onRetryDocument={handleRetryDocument}
+        deletingDocumentId={deletingDocumentId}
+        retryingVersionId={retryingVersionId}
       />
     </div>
   );

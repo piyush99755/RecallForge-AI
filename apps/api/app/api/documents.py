@@ -11,18 +11,20 @@ from fastapi import (
     Query,
     UploadFile,
 )
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session, joinedload
 
 from app.api.schemas.documents import (
+    DeleteDocumentResponse,
     DocumentListItem,
     DocumentListResponse,
     IngestDocumentResponse,
     ParseDocumentResponse,
     ParsedPageResponse,
+    RetryDocumentVersionResponse,
     UploadDocumentResponse,
 )
-from app.db.models import Document, DocumentVersion, Project
+from app.db.models import Chunk, Document, DocumentVersion, Project, Section
 from app.db.session import get_db
 from app.ingestion.checksum import calculate_sha256
 from app.ingestion.parsers.pdf import parse_pdf
@@ -31,7 +33,11 @@ from app.ingestion.service import (
     embed_document_version_service,
     ingest_document_version_service,
 )
-from app.ingestion.storage import build_storage_path, save_file
+from app.ingestion.storage import (
+    build_storage_path,
+    delete_document_files,
+    save_file,
+)
 from app.projects.service import get_or_create_default_project
 
 router = APIRouter(
@@ -310,3 +316,140 @@ def embed_document_version_endpoint(
         "total_chunks": total_chunks,
         "force": force,
     }
+
+
+@router.delete(
+    "/{document_id}",
+    response_model=DeleteDocumentResponse,
+)
+def delete_document(
+    document_id: uuid.UUID,
+    db: Session = Depends(get_db),
+) -> DeleteDocumentResponse:
+    statement = (
+        select(Document)
+        .options(joinedload(Document.versions))
+        .where(Document.id == document_id)
+    )
+    document = db.scalars(statement).unique().first()
+
+    if document is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Document not found",
+        )
+
+    project_id = document.project_id
+    title = document.title
+    storage_keys = [
+        version.storage_key
+        for version in document.versions
+        if version.storage_key
+    ]
+
+    try:
+        db.delete(document)
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+
+    delete_document_files(
+        project_id=project_id,
+        document_id=document_id,
+        storage_keys=storage_keys,
+    )
+
+    return DeleteDocumentResponse(
+        document_id=document_id,
+        deleted=True,
+        message=f"Document '{title}' deleted successfully.",
+    )
+
+
+RETRYABLE_DOCUMENT_STATUSES = {
+    "failed",
+    "embedding_failed",
+    "pending",
+    "ready_for_embedding",
+    "processing",
+    "embedding",
+}
+
+
+@router.post(
+    "/versions/{document_version_id}/retry",
+    response_model=RetryDocumentVersionResponse,
+)
+def retry_document_version(
+    document_version_id: uuid.UUID,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+) -> RetryDocumentVersionResponse:
+    document_version = db.get(
+        DocumentVersion,
+        document_version_id,
+    )
+
+    if document_version is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Document version not found",
+        )
+
+    current_status = (document_version.processing_status or "").lower()
+
+    if current_status == "ready":
+        raise HTTPException(
+            status_code=400,
+            detail="Document version is already ready and does not require retry.",
+        )
+
+    if current_status not in RETRYABLE_DOCUMENT_STATUSES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Document version in status '{document_version.processing_status}' cannot be retried.",
+        )
+
+    chunk_count = (
+        db.scalar(
+            select(func.count(Chunk.id))
+            .join(Section, Chunk.section_id == Section.id)
+            .where(Section.document_version_id == document_version.id)
+        )
+        or 0
+    )
+
+    if (
+        current_status in ("embedding_failed", "ready_for_embedding", "embedding")
+        and chunk_count > 0
+    ):
+        next_status = "ready_for_embedding"
+        stage_message = "Retrying vector embedding stage in background."
+    else:
+        path = Path(document_version.storage_key)
+        if not path.exists():
+            raise HTTPException(
+                status_code=404,
+                detail="Stored PDF file not found on disk; cannot retry ingestion.",
+            )
+        next_status = "pending"
+        stage_message = "Retrying document ingestion and embedding pipeline in background."
+
+    document_version.processing_status = next_status
+
+    try:
+        db.commit()
+        db.refresh(document_version)
+    except Exception:
+        db.rollback()
+        raise
+
+    background_tasks.add_task(process_document_version, document_version.id)
+
+    return RetryDocumentVersionResponse(
+        document_id=document_version.document_id,
+        document_version_id=document_version.id,
+        processing_status=document_version.processing_status,
+        message=stage_message,
+    )

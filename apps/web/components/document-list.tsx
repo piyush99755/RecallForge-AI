@@ -1,4 +1,6 @@
-import React from "react";
+"use client";
+
+import React, { useState } from "react";
 import { DocumentListItem } from "@/lib/types";
 import { DocumentStatusBadge } from "./document-status-badge";
 import {
@@ -9,6 +11,9 @@ import {
   Clock,
   Layers,
   HardDrive,
+  Trash2,
+  RotateCw,
+  Loader2,
 } from "lucide-react";
 
 interface DocumentListProps {
@@ -18,7 +23,13 @@ interface DocumentListProps {
   searchQuery: string;
   onSearchChange: (query: string) => void;
   selectedProjectId?: string;
+  onDeleteDocument?: (doc: DocumentListItem) => Promise<void> | void;
+  onRetryDocument?: (doc: DocumentListItem) => Promise<void> | void;
+  deletingDocumentId?: string | null;
+  retryingVersionId?: string | null;
 }
+
+const RETRYABLE_FAILED_STATUSES = new Set(["failed", "embedding_failed"]);
 
 export function DocumentList({
   documents,
@@ -26,7 +37,13 @@ export function DocumentList({
   isError,
   searchQuery,
   onSearchChange,
+  onDeleteDocument,
+  onRetryDocument,
+  deletingDocumentId,
+  retryingVersionId,
 }: DocumentListProps) {
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+
   const formatFileSize = (bytes: number | null): string => {
     if (!bytes) return "Unknown size";
     if (bytes < 1024) return `${bytes} B`;
@@ -122,56 +139,144 @@ export function DocumentList({
         </div>
       ) : (
         <div className="space-y-3">
-          {filteredDocuments.map((doc) => (
-            <div
-              key={doc.document_id}
-              className="p-5 rounded-2xl bg-card border border-border hover:border-primary/40 shadow-cockpit hover:shadow-cockpit-hover transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-4 group"
-            >
-              <div className="flex items-start gap-3.5 min-w-0">
-                <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0 mt-0.5">
-                  <FileText className="w-5 h-5" />
-                </div>
-                <div className="min-w-0">
-                  <div className="flex flex-wrap items-center gap-2 mb-1">
-                    <h4 className="text-base font-bold text-foreground group-hover:text-primary transition-colors truncate">
-                      {doc.title}
-                    </h4>
-                    {doc.version_number && (
-                      <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-muted text-muted-foreground border border-border/60">
-                        v{doc.version_number}
+          {filteredDocuments.map((doc) => {
+            const normalizedStatus = (doc.processing_status || "").toLowerCase();
+            const isRetryable =
+              RETRYABLE_FAILED_STATUSES.has(normalizedStatus) &&
+              Boolean(doc.latest_version_id);
+            const isDeleting = deletingDocumentId === doc.document_id;
+            const isRetrying =
+              Boolean(doc.latest_version_id) &&
+              retryingVersionId === doc.latest_version_id;
+            const isConfirmingDelete = confirmDeleteId === doc.document_id;
+
+            return (
+              <div
+                key={doc.document_id}
+                className="p-5 rounded-2xl bg-card border border-border hover:border-primary/40 shadow-cockpit hover:shadow-cockpit-hover transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-4 group"
+              >
+                <div className="flex items-start gap-3.5 min-w-0">
+                  <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0 mt-0.5">
+                    <FileText className="w-5 h-5" />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2 mb-1">
+                      <h4 className="text-base font-bold text-foreground group-hover:text-primary transition-colors truncate">
+                        {doc.title}
+                      </h4>
+                      {doc.version_number && (
+                        <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-muted text-muted-foreground border border-border/60">
+                          v{doc.version_number}
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground font-medium">
+                      <span className="flex items-center gap-1 truncate">
+                        <FileText className="w-3.5 h-3.5 text-muted-foreground/70" />
+                        {doc.original_filename || doc.title}
                       </span>
-                    )}
-                  </div>
-
-                  <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground font-medium">
-                    <span className="flex items-center gap-1 truncate">
-                      <FileText className="w-3.5 h-3.5 text-muted-foreground/70" />
-                      {doc.original_filename || doc.title}
-                    </span>
-                    <span>•</span>
-                    <span className="flex items-center gap-1">
-                      <HardDrive className="w-3.5 h-3.5 text-muted-foreground/70" />
-                      {formatFileSize(doc.file_size_bytes)}
-                    </span>
-                    <span>•</span>
-                    <span className="flex items-center gap-1">
-                      <Clock className="w-3.5 h-3.5 text-muted-foreground/70" />
-                      {formatDate(doc.created_at)}
-                    </span>
+                      <span>•</span>
+                      <span className="flex items-center gap-1">
+                        <HardDrive className="w-3.5 h-3.5 text-muted-foreground/70" />
+                        {formatFileSize(doc.file_size_bytes)}
+                      </span>
+                      <span>•</span>
+                      <span className="flex items-center gap-1">
+                        <Clock className="w-3.5 h-3.5 text-muted-foreground/70" />
+                        {formatDate(doc.created_at)}
+                      </span>
+                    </div>
                   </div>
                 </div>
-              </div>
 
-              <div className="flex items-center justify-between sm:justify-end gap-3 shrink-0 pt-3 sm:pt-0 border-t sm:border-t-0 border-border/50">
-                <span className="text-xs uppercase font-semibold text-muted-foreground/80 flex items-center gap-1">
-                  <Layers className="w-3.5 h-3.5" />
-                  {doc.document_type}
-                </span>
+                <div className="flex flex-wrap items-center justify-between sm:justify-end gap-2.5 shrink-0 pt-3 sm:pt-0 border-t sm:border-t-0 border-border/50">
+                  <span className="text-xs uppercase font-semibold text-muted-foreground/80 flex items-center gap-1">
+                    <Layers className="w-3.5 h-3.5" />
+                    {doc.document_type}
+                  </span>
 
-                <DocumentStatusBadge status={doc.processing_status} />
+                  <DocumentStatusBadge status={doc.processing_status} />
+
+                  {/* Retry Processing button ONLY for failed / embedding_failed states */}
+                  {isRetryable && onRetryDocument && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onRetryDocument(doc);
+                      }}
+                      disabled={isRetrying || isDeleting}
+                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-amber-500/10 hover:bg-amber-500/20 text-amber-800 dark:text-amber-300 border border-amber-500/30 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                      title="Retry processing this document"
+                    >
+                      {isRetrying ? (
+                        <>
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          <span>Retrying...</span>
+                        </>
+                      ) : (
+                        <>
+                          <RotateCw className="w-3.5 h-3.5" />
+                          <span>Retry Processing</span>
+                        </>
+                      )}
+                    </button>
+                  )}
+
+                  {/* Delete action with confirmation step */}
+                  {onDeleteDocument && (
+                    <div
+                      className="flex items-center gap-1.5"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      {isConfirmingDelete ? (
+                        <>
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              await onDeleteDocument(doc);
+                              setConfirmDeleteId(null);
+                            }}
+                            disabled={isDeleting}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold bg-rose-600 hover:bg-rose-700 text-white transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            {isDeleting ? (
+                              <>
+                                <Loader2 className="w-3 h-3 animate-spin" />
+                                <span>Deleting...</span>
+                              </>
+                            ) : (
+                              <span>Confirm Delete</span>
+                            )}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setConfirmDeleteId(null)}
+                            disabled={isDeleting}
+                            className="px-2 py-1 rounded-lg text-xs font-semibold bg-muted hover:bg-muted/80 text-muted-foreground hover:text-foreground border border-border transition-colors cursor-pointer disabled:opacity-50"
+                          >
+                            Cancel
+                          </button>
+                        </>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => setConfirmDeleteId(doc.document_id)}
+                          disabled={isDeleting || isRetrying}
+                          className="p-1.5 rounded-lg text-muted-foreground hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-500/10 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                          aria-label={`Delete ${doc.title}`}
+                          title={`Delete ${doc.title}`}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>

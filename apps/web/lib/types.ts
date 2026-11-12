@@ -44,6 +44,19 @@ export interface DocumentListResponse {
   total: number;
 }
 
+export interface DeleteDocumentResponse {
+  document_id: string;
+  deleted: boolean;
+  message: string;
+}
+
+export interface RetryDocumentVersionResponse {
+  document_id: string;
+  document_version_id: string;
+  processing_status: string;
+  message: string;
+}
+
 export interface LearningProgressSummary {
   total_concepts: number;
   weak_count: number;

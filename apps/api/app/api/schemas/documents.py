@@ -54,3 +54,16 @@ class DocumentListItem(BaseModel):
 class DocumentListResponse(BaseModel):
     items: list[DocumentListItem]
     total: int
+
+
+class DeleteDocumentResponse(BaseModel):
+    document_id: UUID
+    deleted: bool
+    message: str
+
+
+class RetryDocumentVersionResponse(BaseModel):
+    document_id: UUID
+    document_version_id: UUID
+    processing_status: str
+    message: str
