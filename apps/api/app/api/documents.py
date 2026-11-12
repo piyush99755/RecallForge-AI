@@ -1,5 +1,4 @@
 import uuid
-from pathlib import Path
 
 from fastapi import (
     APIRouter,
@@ -34,9 +33,11 @@ from app.ingestion.service import (
     ingest_document_version_service,
 )
 from app.ingestion.storage import (
-    build_storage_path,
+    build_storage_key,
     delete_document_files,
+    read_stored_file,
     save_file,
+    stored_file_exists,
 )
 from app.projects.service import get_or_create_default_project
 
@@ -164,20 +165,24 @@ async def upload_document(
 
     version_number = 1
 
-    storage_path = build_storage_path(
+    storage_key = build_storage_key(
         project_id=project_id,
         document_id=document.id,
         version_number=version_number,
         filename=file.filename or "document.pdf",
     )
 
-    save_file(storage_path, file_bytes)
+    save_file(
+        storage_key,
+        file_bytes,
+        content_type=file.content_type or "application/pdf",
+    )
 
     document_version = DocumentVersion(
         document_id=document.id,
         version_number=version_number,
         original_filename=file.filename or "document.pdf",
-        storage_key=str(storage_path),
+        storage_key=storage_key,
         mime_type=file.content_type or "application/octet-stream",
         file_size_bytes=len(file_bytes),
         checksum_sha256=checksum,
@@ -227,15 +232,15 @@ def parse_document_version(
             detail="Only PDF parsing is supported currently",
         )
 
-    path = Path(document_version.storage_key)
-
-    if not path.exists():
+    try:
+        pdf_bytes = read_stored_file(document_version.storage_key)
+    except FileNotFoundError as exc:
         raise HTTPException(
             status_code=404,
             detail="Stored file not found",
-        )
+        ) from exc
 
-    pages = parse_pdf(path)
+    pages = parse_pdf(pdf_bytes)
 
     return ParseDocumentResponse(
         document_version_id=document_version.id,
@@ -427,11 +432,10 @@ def retry_document_version(
         next_status = "ready_for_embedding"
         stage_message = "Retrying vector embedding stage in background."
     else:
-        path = Path(document_version.storage_key)
-        if not path.exists():
+        if not stored_file_exists(document_version.storage_key):
             raise HTTPException(
                 status_code=404,
-                detail="Stored PDF file not found on disk; cannot retry ingestion.",
+                detail="Stored PDF file not found in storage; cannot retry ingestion.",
             )
         next_status = "pending"
         stage_message = "Retrying document ingestion and embedding pipeline in background."
