@@ -14,21 +14,38 @@ import {
 } from "lucide-react";
 
 interface DocumentUploadProps {
+  activeUpload: UploadDocumentResponse | null;
+  liveStatus?: string | null;
+  onUploadStart?: () => void;
   onUploadSuccess: (res: UploadDocumentResponse) => void;
+  onResetUpload: () => void;
 }
 
-export function DocumentUpload({ onUploadSuccess }: DocumentUploadProps) {
+export function DocumentUpload({
+  activeUpload,
+  liveStatus,
+  onUploadStart,
+  onUploadSuccess,
+  onResetUpload,
+}: DocumentUploadProps) {
   const [file, setFile] = useState<File | null>(null);
   const [title, setTitle] = useState<string>("");
   const [isDragOver, setIsDragOver] = useState(false);
   const [status, setStatus] = useState<
-    "idle" | "selected" | "uploading" | "success" | "error"
+    "idle" | "selected" | "uploading" | "error"
   >("idle");
-  const [uploadResult, setUploadResult] =
-    useState<UploadDocumentResponse | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const effectiveStatus = (
+    liveStatus ||
+    activeUpload?.processing_status ||
+    "pending"
+  ).toLowerCase();
+  const isReady = effectiveStatus === "ready";
+  const isFailed =
+    effectiveStatus === "failed" || effectiveStatus === "embedding_failed";
 
   const formatFileSize = (bytes: number): string => {
     if (bytes < 1024) return `${bytes} B`;
@@ -86,15 +103,19 @@ export function DocumentUpload({ onUploadSuccess }: DocumentUploadProps) {
     }
   };
 
-  const handleRemoveFile = () => {
+  const resetFormFields = () => {
     setFile(null);
     setTitle("");
     setStatus("idle");
     setErrorMessage(null);
-    setUploadResult(null);
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
     }
+  };
+
+  const handleRemoveFile = () => {
+    resetFormFields();
+    onResetUpload();
   };
 
   const isFormValid = Boolean(file) && title.trim().length > 0;
@@ -112,6 +133,7 @@ export function DocumentUpload({ onUploadSuccess }: DocumentUploadProps) {
       return;
     }
 
+    onUploadStart?.();
     setStatus("uploading");
     setErrorMessage(null);
 
@@ -121,8 +143,7 @@ export function DocumentUpload({ onUploadSuccess }: DocumentUploadProps) {
 
     try {
       const result = await uploadDocument(formData);
-      setUploadResult(result);
-      setStatus("success");
+      resetFormFields();
       onUploadSuccess(result);
     } catch (err) {
       const msg =
@@ -152,47 +173,93 @@ export function DocumentUpload({ onUploadSuccess }: DocumentUploadProps) {
         </span>
       </div>
 
-      {status === "success" && uploadResult ? (
-        <div className="p-6 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 space-y-4">
+      {activeUpload ? (
+        <div
+          className={`p-6 rounded-2xl border space-y-4 ${
+            isFailed
+              ? "bg-rose-500/10 border-rose-500/20"
+              : "bg-emerald-500/10 border-emerald-500/20"
+          }`}
+        >
           <div className="flex items-center gap-3">
-            <CheckCircle2 className="w-6 h-6 text-emerald-600 dark:text-emerald-400 shrink-0" />
+            {isReady ? (
+              <CheckCircle2 className="w-6 h-6 text-emerald-600 dark:text-emerald-400 shrink-0" />
+            ) : isFailed ? (
+              <AlertCircle className="w-6 h-6 text-rose-600 dark:text-rose-400 shrink-0" />
+            ) : (
+              <Loader2 className="w-6 h-6 text-emerald-600 dark:text-emerald-400 animate-spin shrink-0" />
+            )}
             <div>
-              <h4 className="text-base font-bold text-emerald-950 dark:text-emerald-200">
-                {uploadResult.duplicate
+              <h4
+                className={`text-base font-bold ${
+                  isFailed
+                    ? "text-rose-950 dark:text-rose-200"
+                    : "text-emerald-950 dark:text-emerald-200"
+                }`}
+              >
+                {isReady
+                  ? "Processing complete! Document is ready for study."
+                  : isFailed
+                  ? "Document Processing Failed"
+                  : activeUpload.duplicate
                   ? "Existing Document Recognized"
                   : "Document Uploaded & Pipeline Scheduled"}
               </h4>
-              <p className="text-xs text-emerald-800 dark:text-emerald-300">
-                {uploadResult.duplicate
+              <p
+                className={`text-xs ${
+                  isFailed
+                    ? "text-rose-800 dark:text-rose-300"
+                    : "text-emerald-800 dark:text-emerald-300"
+                }`}
+              >
+                {isReady
+                  ? activeUpload.duplicate
+                    ? "Checksum match found. Existing version is ready in your Study Library."
+                    : "Ingestion and vector embedding finished. Restoring upload form..."
+                  : isFailed
+                  ? "Pipeline execution stopped. You can retry processing from the vault below or upload another PDF."
+                  : activeUpload.duplicate
                   ? "Checksum match found. Existing version retrieved."
                   : "Background ingestion & vector embedding pipeline is running automatically."}
               </p>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs bg-card/60 p-4 rounded-xl border border-emerald-500/20">
+          <div
+            className={`grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs bg-card/60 p-4 rounded-xl border ${
+              isFailed ? "border-rose-500/20" : "border-emerald-500/20"
+            }`}
+          >
             <div>
               <span className="text-muted-foreground">Filename:</span>{" "}
               <span className="font-semibold text-foreground">
-                {uploadResult.filename}
+                {activeUpload.filename}
               </span>
             </div>
             <div>
               <span className="text-muted-foreground">Version:</span>{" "}
               <span className="font-semibold text-foreground">
-                v{uploadResult.version_number}
+                v{activeUpload.version_number}
               </span>
             </div>
             <div>
-              <span className="text-muted-foreground">Initial Status:</span>{" "}
-              <span className="font-semibold uppercase text-amber-700 dark:text-amber-400">
-                {uploadResult.processing_status}
+              <span className="text-muted-foreground">Status:</span>{" "}
+              <span
+                className={`font-semibold uppercase ${
+                  isReady
+                    ? "text-emerald-700 dark:text-emerald-400"
+                    : isFailed
+                    ? "text-rose-700 dark:text-rose-400"
+                    : "text-amber-700 dark:text-amber-400"
+                }`}
+              >
+                {effectiveStatus.replace(/_/g, " ")}
               </span>
             </div>
             <div>
               <span className="text-muted-foreground">Duplicate:</span>{" "}
               <span className="font-semibold text-foreground">
-                {uploadResult.duplicate ? "Yes (Reused)" : "No (New Upload)"}
+                {activeUpload.duplicate ? "Yes (Reused)" : "No (New Upload)"}
               </span>
             </div>
           </div>
