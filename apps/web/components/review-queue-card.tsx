@@ -26,18 +26,18 @@ export function ReviewQueueCard({ items }: ReviewQueueCardProps) {
   }
 
   return (
-    <div className="rounded-2xl bg-card border border-border p-6 shadow-cockpit">
-      <div className="flex items-center justify-between mb-4">
-        <div>
+    <div className="rounded-2xl bg-card border border-border p-5 sm:p-6 shadow-cockpit">
+      <div className="flex items-center justify-between gap-2 mb-4">
+        <div className="min-w-0">
           <h3 className="text-base font-bold text-foreground flex items-center gap-2">
-            <Clock className="w-4 h-4 text-primary" />
+            <Clock className="w-4 h-4 text-primary shrink-0" />
             <span>Upcoming Review Queue</span>
           </h3>
           <p className="text-xs text-muted-foreground mt-0.5">
             Concepts queued by spaced repetition priority
           </p>
         </div>
-        <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-primary/10 text-primary">
+        <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-primary/10 text-primary shrink-0">
           {items.length} {items.length === 1 ? "Item" : "Items"}
         </span>
       </div>
@@ -53,7 +53,7 @@ export function ReviewQueueCard({ items }: ReviewQueueCardProps) {
               key={`${item.concept}-${index}`}
               className="flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-xl bg-muted/40 border border-border/60 hover:bg-muted/70 transition-all gap-3 group"
             >
-              <div className="flex items-start gap-3">
+              <div className="flex items-start gap-3 min-w-0">
                 <div
                   className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 mt-0.5 ${
                     isDue
@@ -63,9 +63,9 @@ export function ReviewQueueCard({ items }: ReviewQueueCardProps) {
                 >
                   <RotateCcw className="w-4 h-4" />
                 </div>
-                <div>
+                <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
-                    <h4 className="text-sm font-bold text-foreground group-hover:text-primary transition-colors">
+                    <h4 className="text-sm font-bold text-foreground group-hover:text-primary transition-colors break-words">
                       {formattedConcept}
                     </h4>
                     <span className="text-[11px] px-2 py-0.5 rounded-full bg-muted font-medium text-muted-foreground border border-border/50">

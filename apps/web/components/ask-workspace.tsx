@@ -208,9 +208,9 @@ export function AskWorkspace() {
   };
 
   return (
-    <div className="space-y-8 max-w-4xl mx-auto">
+    <div className="space-y-6 sm:space-y-8 max-w-4xl mx-auto">
       {/* Search Input Box */}
-      <div className="rounded-2xl bg-card border border-border p-6 shadow-cockpit space-y-5">
+      <div className="rounded-2xl bg-card border border-border p-4 sm:p-6 shadow-cockpit space-y-5">
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-border/60 pb-3">
             <label
@@ -222,43 +222,43 @@ export function AskWorkspace() {
             </label>
 
             {/* Mode Selector */}
-            <div className="flex items-center gap-1.5 bg-muted/60 p-1 rounded-xl border border-border/80">
+            <div className="grid grid-cols-3 sm:flex items-center gap-1.5 bg-muted/60 p-1 rounded-xl border border-border/80 w-full sm:w-auto">
               <button
                 type="button"
                 onClick={() => setMode("beginner")}
-                className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                className={`flex items-center justify-center gap-1.5 px-2.5 sm:px-3 py-1.5 sm:py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
                   mode === "beginner"
                     ? "bg-card text-foreground shadow-xs border border-border"
                     : "text-muted-foreground hover:text-foreground"
                 }`}
               >
-                <GraduationCap className="w-3.5 h-3.5 text-emerald-500" />
+                <GraduationCap className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
                 <span>Beginner</span>
               </button>
 
               <button
                 type="button"
                 onClick={() => setMode("interview")}
-                className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                className={`flex items-center justify-center gap-1.5 px-2.5 sm:px-3 py-1.5 sm:py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
                   mode === "interview"
                     ? "bg-card text-foreground shadow-xs border border-border"
                     : "text-muted-foreground hover:text-foreground"
                 }`}
               >
-                <Briefcase className="w-3.5 h-3.5 text-amber-500" />
+                <Briefcase className="w-3.5 h-3.5 text-amber-500 shrink-0" />
                 <span>Interview</span>
               </button>
 
               <button
                 type="button"
                 onClick={() => setMode("senior")}
-                className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                className={`flex items-center justify-center gap-1.5 px-2.5 sm:px-3 py-1.5 sm:py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
                   mode === "senior"
                     ? "bg-card text-foreground shadow-xs border border-border"
                     : "text-muted-foreground hover:text-foreground"
                 }`}
               >
-                <Cpu className="w-3.5 h-3.5 text-indigo-500" />
+                <Cpu className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
                 <span>Senior</span>
               </button>
             </div>
@@ -276,8 +276,8 @@ export function AskWorkspace() {
             />
           </div>
 
-          <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
-            <span>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-muted-foreground">
+            <span className="hidden sm:inline">
               Press{" "}
               <kbd className="px-1.5 py-0.5 rounded bg-muted border border-border text-[10px] font-mono">
                 Ctrl
@@ -292,7 +292,7 @@ export function AskWorkspace() {
             <button
               type="submit"
               disabled={!query.trim() || isLoading}
-              className={`inline-flex items-center gap-2 px-5 py-2.5 rounded-xl font-semibold text-xs transition-all shadow-sm ${
+              className={`w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl font-semibold text-xs transition-all shadow-sm ${
                 query.trim() && !isLoading
                   ? "bg-primary text-primary-foreground hover:bg-primary-hover cursor-pointer"
                   : "bg-muted text-muted-foreground border border-border/60 cursor-not-allowed opacity-70"
@@ -356,8 +356,8 @@ export function AskWorkspace() {
           )}
 
           {/* Grounded Answer Card */}
-          <div className="p-6 rounded-2xl bg-card border border-border shadow-cockpit space-y-4">
-            <div className="flex items-center justify-between border-b border-border/60 pb-3">
+          <div className="p-4 sm:p-6 rounded-2xl bg-card border border-border shadow-cockpit space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/60 pb-3">
               <h3 className="text-base font-bold text-foreground flex items-center gap-2">
                 <Sparkles className="w-4 h-4 text-primary" />
                 <span>Grounded Response</span>
@@ -380,7 +380,7 @@ export function AskWorkspace() {
                 </p>
               </div>
             ) : (
-              <div className="prose prose-sm dark:prose-invert max-w-none text-foreground text-sm">
+              <div className="prose prose-sm dark:prose-invert max-w-none text-foreground text-sm break-words overflow-x-auto">
                 <ReactMarkdown components={markdownComponents}>
                   {response.answer}
                 </ReactMarkdown>

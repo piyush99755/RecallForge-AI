@@ -16,14 +16,14 @@ export function MasteryCard({ summary }: MasteryCardProps) {
   const weakPct = total_concepts ? Math.round((weak_count / total_concepts) * 100) : 0;
 
   return (
-    <div className="rounded-2xl bg-card border border-border p-6 shadow-cockpit flex flex-col justify-between">
+    <div className="rounded-2xl bg-card border border-border p-5 sm:p-6 shadow-cockpit flex flex-col justify-between">
       <div>
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center justify-between gap-2 mb-4">
           <h3 className="text-base font-bold text-foreground flex items-center gap-2">
-            <Award className="w-4 h-4 text-primary" />
+            <Award className="w-4 h-4 text-primary shrink-0" />
             <span>Mastery Breakdown</span>
           </h3>
-          <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-muted text-muted-foreground">
+          <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-muted text-muted-foreground shrink-0">
             {total_concepts} Concepts
           </span>
         </div>
@@ -53,42 +53,42 @@ export function MasteryCard({ summary }: MasteryCardProps) {
         </div>
 
         {/* Metrics Grid */}
-        <div className="grid grid-cols-2 gap-3">
-          <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center gap-3">
+        <div className="grid grid-cols-2 gap-2.5 sm:gap-3">
+          <div className="p-2.5 sm:p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center gap-2.5 min-w-0">
             <CheckCircle2 className="w-5 h-5 text-emerald-600 dark:text-emerald-400 shrink-0" />
-            <div>
-              <p className="text-xs text-muted-foreground font-medium">Mastered</p>
-              <p className="text-lg font-bold text-foreground">
+            <div className="min-w-0">
+              <p className="text-xs text-muted-foreground font-medium truncate">Mastered</p>
+              <p className="text-base sm:text-lg font-bold text-foreground">
                 {mastered_count} <span className="text-xs text-muted-foreground font-normal">({masteredPct}%)</span>
               </p>
             </div>
           </div>
 
-          <div className="p-3 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center gap-3">
+          <div className="p-2.5 sm:p-3 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center gap-2.5 min-w-0">
             <TrendingUp className="w-5 h-5 text-blue-600 dark:text-blue-400 shrink-0" />
-            <div>
-              <p className="text-xs text-muted-foreground font-medium">Strong</p>
-              <p className="text-lg font-bold text-foreground">
+            <div className="min-w-0">
+              <p className="text-xs text-muted-foreground font-medium truncate">Strong</p>
+              <p className="text-base sm:text-lg font-bold text-foreground">
                 {strong_count} <span className="text-xs text-muted-foreground font-normal">({strongPct}%)</span>
               </p>
             </div>
           </div>
 
-          <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center gap-3">
+          <div className="p-2.5 sm:p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center gap-2.5 min-w-0">
             <AlertCircle className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0" />
-            <div>
-              <p className="text-xs text-muted-foreground font-medium">Developing</p>
-              <p className="text-lg font-bold text-foreground">
+            <div className="min-w-0">
+              <p className="text-xs text-muted-foreground font-medium truncate">Developing</p>
+              <p className="text-base sm:text-lg font-bold text-foreground">
                 {developing_count} <span className="text-xs text-muted-foreground font-normal">({developingPct}%)</span>
               </p>
             </div>
           </div>
 
-          <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 flex items-center gap-3">
+          <div className="p-2.5 sm:p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 flex items-center gap-2.5 min-w-0">
             <AlertCircle className="w-5 h-5 text-rose-600 dark:text-rose-400 shrink-0" />
-            <div>
-              <p className="text-xs text-muted-foreground font-medium">Needs Work</p>
-              <p className="text-lg font-bold text-foreground">
+            <div className="min-w-0">
+              <p className="text-xs text-muted-foreground font-medium truncate">Needs Work</p>
+              <p className="text-base sm:text-lg font-bold text-foreground">
                 {weak_count} <span className="text-xs text-muted-foreground font-normal">({weakPct}%)</span>
               </p>
             </div>

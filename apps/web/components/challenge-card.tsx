@@ -42,10 +42,10 @@ export function ChallengeCard({
   return (
     <div className="space-y-6">
       {/* Question Card */}
-      <div className="p-6 sm:p-8 rounded-2xl bg-card border border-border shadow-cockpit space-y-6">
+      <div className="p-4 sm:p-8 rounded-2xl bg-card border border-border shadow-cockpit space-y-6">
         {/* Meta badges */}
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/60 pb-4">
-          <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center justify-between gap-2.5 border-b border-border/60 pb-4">
+          <div className="flex flex-wrap items-center gap-2">
             <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary/10 text-primary font-semibold text-xs border border-primary/20">
               <Sparkles className="w-3.5 h-3.5" />
               {titlePrefix}
@@ -71,7 +71,7 @@ export function ChallengeCard({
             <span>Diagnostic Scenario</span>
           </div>
 
-          <h3 className="text-lg sm:text-xl font-bold text-foreground leading-relaxed whitespace-pre-wrap">
+          <h3 className="text-base sm:text-xl font-bold text-foreground leading-relaxed whitespace-pre-wrap break-words">
             {challenge.question}
           </h3>
         </div>
@@ -108,7 +108,7 @@ export function ChallengeCard({
           </div>
 
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-muted-foreground">
-            <span>
+            <span className="hidden sm:inline">
               Press{" "}
               <kbd className="px-1.5 py-0.5 rounded bg-muted border border-border text-[10px] font-mono">
                 Ctrl
@@ -123,7 +123,7 @@ export function ChallengeCard({
             <button
               type="submit"
               disabled={!answer.trim() || isSubmitting}
-              className={`inline-flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl font-semibold text-xs transition-all shadow-sm ${
+              className={`w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl font-semibold text-xs transition-all shadow-sm ${
                 answer.trim() && !isSubmitting
                   ? "bg-primary text-primary-foreground hover:bg-primary-hover cursor-pointer"
                   : "bg-muted text-muted-foreground border border-border/60 cursor-not-allowed opacity-70"

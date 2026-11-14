@@ -56,8 +56,8 @@ export function AccessGate({
   };
 
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center p-4">
-      <div className="w-full max-w-md rounded-3xl bg-card border border-border p-7 sm:p-8 shadow-cockpit space-y-6">
+    <div className="min-h-dvh bg-background flex items-center justify-center pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))] pl-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))]">
+      <div className="w-full max-w-md rounded-3xl bg-card border border-border p-6 sm:p-8 shadow-cockpit space-y-6">
         <div className="flex items-center gap-3">
           <div className="w-11 h-11 rounded-2xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
             <BrainCircuit className="w-6 h-6" />

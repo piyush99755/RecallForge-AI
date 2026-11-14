@@ -36,14 +36,14 @@ export function ChallengeEvaluationView({
     <div className="space-y-6">
       {/* Hero Score Card */}
       <div
-        className={`p-6 sm:p-8 rounded-2xl border shadow-cockpit space-y-6 ${
+        className={`p-5 sm:p-8 rounded-2xl border shadow-cockpit space-y-6 ${
           isPassing
             ? "bg-emerald-500/10 border-emerald-500/20"
             : "bg-rose-500/10 border-rose-500/20"
         }`}
       >
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="flex items-center gap-3.5">
+          <div className="flex items-center gap-3.5 min-w-0">
             <div
               className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 shadow-sm ${
                 isPassing
@@ -58,8 +58,8 @@ export function ChallengeEvaluationView({
               )}
             </div>
 
-            <div>
-              <div className="flex items-center gap-2 mb-0.5">
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2 mb-0.5">
                 <span
                   className={`text-xs font-bold uppercase tracking-wider ${
                     isPassing
@@ -70,7 +70,7 @@ export function ChallengeEvaluationView({
                   {isPassing ? "Concept Verified" : "Needs Reinforcement"}
                 </span>
                 <span className="text-xs text-muted-foreground">•</span>
-                <span className="text-xs font-medium text-muted-foreground">
+                <span className="text-xs font-medium text-muted-foreground break-words">
                   {formatConceptName(evaluation.topic)}
                 </span>
               </div>
@@ -83,7 +83,7 @@ export function ChallengeEvaluationView({
 
           {/* Big Score Display */}
           <div className="flex items-center gap-4 self-start sm:self-auto">
-            <div className="text-right">
+            <div className="text-left sm:text-right">
               <span className="block text-xs uppercase font-bold text-muted-foreground">
                 Evaluation Score
               </span>
@@ -192,20 +192,20 @@ export function ChallengeEvaluationView({
           <button
             type="button"
             onClick={onRetry}
-            className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-border bg-card text-foreground font-semibold text-xs hover:bg-muted transition-all cursor-pointer"
+            className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-border bg-card text-foreground font-semibold text-xs hover:bg-muted transition-all cursor-pointer"
           >
             <RotateCcw className="w-3.5 h-3.5" />
             <span>Try Again</span>
           </button>
         ) : (
-          <div />
+          <div className="hidden sm:block" />
         )}
 
         {onNext && (
           <button
             type="button"
             onClick={onNext}
-            className="inline-flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl bg-primary text-primary-foreground font-semibold text-xs hover:bg-primary-hover shadow-sm transition-all cursor-pointer"
+            className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl bg-primary text-primary-foreground font-semibold text-xs hover:bg-primary-hover shadow-sm transition-all cursor-pointer"
           >
             <span>{nextButtonLabel}</span>
             <ArrowRight className="w-3.5 h-3.5" />

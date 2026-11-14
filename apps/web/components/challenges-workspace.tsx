@@ -123,7 +123,7 @@ export function ChallengesWorkspace() {
   if (activeChallenge) {
     return (
       <div className="space-y-6 max-w-4xl mx-auto">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <button
             type="button"
             onClick={handleReset}
@@ -169,9 +169,9 @@ export function ChallengesWorkspace() {
   }
 
   return (
-    <div className="space-y-8 max-w-4xl mx-auto">
+    <div className="space-y-6 sm:space-y-8 max-w-4xl mx-auto">
       {/* Generate Input Card */}
-      <div className="rounded-2xl bg-card border border-border p-6 sm:p-8 shadow-cockpit space-y-6">
+      <div className="rounded-2xl bg-card border border-border p-4 sm:p-8 shadow-cockpit space-y-6">
         <div className="space-y-1">
           <h3 className="text-lg font-bold text-foreground flex items-center gap-2">
             <Trophy className="w-5 h-5 text-primary" />
@@ -229,7 +229,7 @@ export function ChallengesWorkspace() {
                     if (insufficientEvidenceMsg) setInsufficientEvidenceMsg(null);
                   }}
                   disabled={isGenerating}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer border ${
+                  className={`px-3 py-1.5 rounded-lg text-xs font-medium text-left transition-all cursor-pointer border ${
                     topic === sug
                       ? "bg-primary text-primary-foreground border-primary"
                       : "bg-muted/60 hover:bg-muted text-foreground border-border/60 hover:border-primary/40"
@@ -245,7 +245,7 @@ export function ChallengesWorkspace() {
             <button
               type="submit"
               disabled={isGenerating || topic.trim().length === 0}
-              className={`inline-flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl font-semibold text-xs transition-all shadow-sm ${
+              className={`w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl font-semibold text-xs transition-all shadow-sm ${
                 !isGenerating && topic.trim().length > 0
                   ? "bg-primary text-primary-foreground hover:bg-primary-hover cursor-pointer"
                   : "bg-muted text-muted-foreground border border-border/60 cursor-not-allowed opacity-70"

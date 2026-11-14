@@ -171,19 +171,21 @@ export function DocumentList({
                       )}
                     </div>
 
-                    <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground font-medium">
-                      <span className="flex items-center gap-1 truncate">
-                        <FileText className="w-3.5 h-3.5 text-muted-foreground/70" />
-                        {doc.original_filename || doc.title}
+                    <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-xs text-muted-foreground font-medium">
+                      <span className="flex items-center gap-1 min-w-0 max-w-[200px] sm:max-w-xs">
+                        <FileText className="w-3.5 h-3.5 text-muted-foreground/70 shrink-0" />
+                        <span className="truncate">
+                          {doc.original_filename || doc.title}
+                        </span>
                       </span>
                       <span>•</span>
                       <span className="flex items-center gap-1">
-                        <HardDrive className="w-3.5 h-3.5 text-muted-foreground/70" />
+                        <HardDrive className="w-3.5 h-3.5 text-muted-foreground/70 shrink-0" />
                         {formatFileSize(doc.file_size_bytes)}
                       </span>
                       <span>•</span>
                       <span className="flex items-center gap-1">
-                        <Clock className="w-3.5 h-3.5 text-muted-foreground/70" />
+                        <Clock className="w-3.5 h-3.5 text-muted-foreground/70 shrink-0" />
                         {formatDate(doc.created_at)}
                       </span>
                     </div>
@@ -227,7 +229,7 @@ export function DocumentList({
                   {/* Delete action with confirmation step */}
                   {onDeleteDocument && (
                     <div
-                      className="flex items-center gap-1.5"
+                      className="flex items-center gap-2"
                       onClick={(e) => e.stopPropagation()}
                     >
                       {isConfirmingDelete ? (
@@ -239,7 +241,7 @@ export function DocumentList({
                               setConfirmDeleteId(null);
                             }}
                             disabled={isDeleting}
-                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold bg-rose-600 hover:bg-rose-700 text-white transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold bg-rose-600 hover:bg-rose-700 text-white transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                           >
                             {isDeleting ? (
                               <>
@@ -254,7 +256,7 @@ export function DocumentList({
                             type="button"
                             onClick={() => setConfirmDeleteId(null)}
                             disabled={isDeleting}
-                            className="px-2 py-1 rounded-lg text-xs font-semibold bg-muted hover:bg-muted/80 text-muted-foreground hover:text-foreground border border-border transition-colors cursor-pointer disabled:opacity-50"
+                            className="px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-muted hover:bg-muted/80 text-muted-foreground hover:text-foreground border border-border transition-colors cursor-pointer disabled:opacity-50"
                           >
                             Cancel
                           </button>
@@ -264,7 +266,7 @@ export function DocumentList({
                           type="button"
                           onClick={() => setConfirmDeleteId(doc.document_id)}
                           disabled={isDeleting || isRetrying}
-                          className="p-1.5 rounded-lg text-muted-foreground hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-500/10 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                          className="p-2 rounded-lg text-muted-foreground hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-500/10 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                           aria-label={`Delete ${doc.title}`}
                           title={`Delete ${doc.title}`}
                         >

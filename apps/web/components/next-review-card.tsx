@@ -16,15 +16,15 @@ export function NextReviewCard({ item }: NextReviewCardProps) {
     : null;
 
   return (
-    <div className="relative overflow-hidden rounded-2xl bg-card border border-border p-6 sm:p-8 shadow-cockpit hover:shadow-cockpit-hover transition-all group">
+    <div className="relative overflow-hidden rounded-2xl bg-card border border-border p-5 sm:p-8 shadow-cockpit hover:shadow-cockpit-hover transition-all group">
       {/* Background glow accent */}
       <div className="absolute -right-12 -top-12 w-64 h-64 bg-gradient-to-br from-primary/10 via-accent/5 to-transparent rounded-full blur-2xl pointer-events-none" />
 
       <div className="relative z-10 flex flex-col justify-between h-full gap-6">
         <div>
           {/* Top header meta */}
-          <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-            <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center justify-between gap-2.5 mb-4">
+            <div className="flex flex-wrap items-center gap-2">
               <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-warning/10 border border-warning/20 text-amber-700 dark:text-amber-400 font-semibold text-xs">
                 <Clock className="w-3.5 h-3.5" />
                 What to strengthen next
@@ -45,7 +45,7 @@ export function NextReviewCard({ item }: NextReviewCardProps) {
           </div>
 
           {/* Concept Title */}
-          <h3 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-foreground group-hover:text-primary transition-colors mb-2">
+          <h3 className="text-xl sm:text-3xl font-extrabold tracking-tight text-foreground group-hover:text-primary transition-colors mb-2 break-words">
             {formattedConcept}
           </h3>
 
@@ -57,8 +57,8 @@ export function NextReviewCard({ item }: NextReviewCardProps) {
           {item.top_gap && (
             <div className="flex items-start gap-3 p-4 rounded-xl bg-amber-500/5 border border-amber-500/20">
               <AlertTriangle className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
-              <div>
-                <div className="flex items-center gap-2 mb-0.5">
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2 mb-0.5">
                   <span className="text-xs font-bold text-amber-900 dark:text-amber-200 uppercase tracking-wider">
                     Target Gap Detected
                   </span>
@@ -66,7 +66,7 @@ export function NextReviewCard({ item }: NextReviewCardProps) {
                     Seen {item.top_gap.occurrences} {item.top_gap.occurrences === 1 ? "time" : "times"}
                   </span>
                 </div>
-                <p className="text-sm font-semibold text-foreground">
+                <p className="text-sm font-semibold text-foreground break-words">
                   {formattedGapName}
                 </p>
               </div>
@@ -76,7 +76,7 @@ export function NextReviewCard({ item }: NextReviewCardProps) {
 
         {/* Footer Actions */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-4 border-t border-border/60">
-          <div className="flex items-center gap-4 text-xs text-muted-foreground">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
             <span className="flex items-center gap-1.5 font-medium">
               <Target className="w-4 h-4 text-primary" /> Priority Score: {(item.priority_score * 100).toFixed(0)}%
             </span>
@@ -86,7 +86,7 @@ export function NextReviewCard({ item }: NextReviewCardProps) {
 
           <Link
             href="/review"
-            className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-primary text-primary-foreground font-semibold text-sm shadow-md hover:bg-primary-hover hover:shadow-lg focus:outline-hidden focus:ring-2 focus:ring-primary/20 transition-all cursor-pointer"
+            className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-primary text-primary-foreground font-semibold text-sm shadow-md hover:bg-primary-hover hover:shadow-lg focus:outline-hidden focus:ring-2 focus:ring-primary/20 transition-all cursor-pointer"
           >
             <Sparkles className="w-4 h-4" />
             <span>Start Review</span>
