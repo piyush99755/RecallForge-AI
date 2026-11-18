@@ -1,8 +1,16 @@
 from uuid import UUID
 import json
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
+from app.core.config import get_settings
+from app.core.demo_protection import (
+    enforce_demo_rate_limit,
+    get_ephemeral_demo_challenge,
+    preview_demo_concept_progress,
+    require_active_demo_session_jti,
+    store_ephemeral_demo_challenge,
+)
 from app.db.session import get_db
 from app.rag.challenge import generate_challenge_question
 from app.rag.context import build_rag_context
@@ -73,8 +81,19 @@ class ChallengeEvaluationResponse(BaseModel):
 )
 def create_challenge(
     payload: ChallengeRequest,
+    request: Request = None,  # type: ignore[assignment]
     db: Session = Depends(get_db),
 ):
+    is_demo = get_settings().is_demo_mode
+    owner_jti = require_active_demo_session_jti(request) if is_demo else ""
+
+    enforce_demo_rate_limit(
+        bucket="challenge_generate",
+        max_requests=8,
+        window_seconds=600,
+        request=request,
+    )
+
     candidates = hybrid_search(
         db=db,
         query=payload.topic,
@@ -111,6 +130,37 @@ def create_challenge(
         context=context
     )
 
+    sources_response = [
+        ChallengeSourceResponse(
+            source_id=source.source_id,
+            chunk_id=source.chunk_id,
+            document_title=source.document_title,
+            section_title=source.section_title,
+            page_start=source.page_start,
+            page_end=source.page_end,
+        )
+        for source in context.sources
+    ]
+
+    if is_demo:
+        ephemeral = store_ephemeral_demo_challenge(
+            owner_jti=owner_jti,
+            project_id=payload.project_id,
+            document_id=payload.document_id,
+            topic=payload.topic,
+            concept=challenge.concept,
+            question=challenge.question,
+            expected_answer=challenge.expected_answer,
+            explanation=challenge.explanation,
+        )
+        return ChallengeResponse(
+            challenge_id=ephemeral.id,
+            topic=payload.topic,
+            concept=ephemeral.concept,
+            question=ephemeral.question,
+            sources=sources_response,
+        )
+
     stored_challenge = StudyChallenge(
         project_id=payload.project_id,
         document_id=payload.document_id,
@@ -134,17 +184,7 @@ def create_challenge(
         topic=payload.topic,
         concept=stored_challenge.concept,
         question=challenge.question,
-        sources=[
-            ChallengeSourceResponse(
-                source_id=source.source_id,
-                chunk_id=source.chunk_id,
-                document_title=source.document_title,
-                section_title=source.section_title,
-                page_start=source.page_start,
-                page_end=source.page_end,
-            )
-            for source in context.sources
-        ],
+        sources=sources_response,
     )
 
 
@@ -154,8 +194,57 @@ def create_challenge(
 )
 def evaluate_challenge(
     payload: ChallengeEvaluationRequest,
+    request: Request = None,  # type: ignore[assignment]
     db: Session = Depends(get_db),
 ):
+    is_demo = get_settings().is_demo_mode
+    caller_jti = require_active_demo_session_jti(request) if is_demo else ""
+
+    enforce_demo_rate_limit(
+        bucket="challenge_evaluate",
+        max_requests=10,
+        window_seconds=600,
+        request=request,
+    )
+
+    if is_demo:
+        ephemeral = get_ephemeral_demo_challenge(
+            payload.challenge_id,
+            owner_jti=caller_jti,
+        )
+        if ephemeral is None:
+            raise HTTPException(
+                status_code=404,
+                detail="Challenge not found or demo challenge expired.",
+            )
+
+        evaluation = evaluate_challenge_answer(
+            question=ephemeral.question,
+            expected_answer=ephemeral.expected_answer,
+            user_answer=payload.user_answer,
+        )
+
+        attempts, avg_score, mastery_level = preview_demo_concept_progress(
+            db=db,
+            project_id=ephemeral.project_id,
+            document_id=ephemeral.document_id,
+            concept=ephemeral.concept,
+            score=evaluation.score,
+        )
+
+        return ChallengeEvaluationResponse(
+            score=evaluation.score,
+            correct=evaluation.correct,
+            feedback=evaluation.feedback,
+            missing_points=evaluation.missing_points,
+            expected_answer=ephemeral.expected_answer,
+            explanation=ephemeral.explanation,
+            topic=ephemeral.topic,
+            attempts=attempts,
+            average_score=avg_score,
+            mastery_level=mastery_level,
+        )
+
     challenge = db.get(
         StudyChallenge,
         payload.challenge_id,

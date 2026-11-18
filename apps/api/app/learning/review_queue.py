@@ -149,6 +149,14 @@ def build_review_targets(
     return targets
 
 
+def _ensure_utc(dt: datetime | None) -> datetime | None:
+    if dt is None:
+        return None
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt
+
+
 def calculate_review_priority(row: ConceptProgress) -> float:
     mastery_weights = {
         "weak": 1.0,
@@ -166,11 +174,12 @@ def calculate_review_priority(row: ConceptProgress) -> float:
     attempt_factor = 1.0 / max(row.attempts, 1)
 
     now = datetime.now(timezone.utc)
+    next_review = _ensure_utc(row.next_review_at)
 
-    if row.next_review_at is None:
+    if next_review is None:
         due_factor = 0.5
-    elif row.next_review_at <= now:
-        overdue_days = (now - row.next_review_at).total_seconds() / 86400
+    elif next_review <= now:
+        overdue_days = (now - next_review).total_seconds() / 86400
         due_factor = min(1.0 + (overdue_days / 30.0), 1.5)
     else:
         due_factor = 0.0
@@ -185,8 +194,9 @@ def calculate_review_priority(row: ConceptProgress) -> float:
 
 def build_review_reason(row: ConceptProgress) -> str:
     now = datetime.now(timezone.utc)
+    next_review = _ensure_utc(row.next_review_at)
 
-    if row.next_review_at is not None and row.next_review_at <= now:
+    if next_review is not None and next_review <= now:
         return (
             "This concept is due for review based on your "
             "spaced-repetition schedule."
@@ -226,15 +236,16 @@ def build_review_reason(row: ConceptProgress) -> str:
 
 
 def get_review_status(row: ConceptProgress) -> str:
-    if row.next_review_at is None:
+    next_review = _ensure_utc(row.next_review_at)
+    if next_review is None:
         return "not_scheduled"
 
     now = datetime.now(timezone.utc)
 
-    if row.next_review_at < now:
+    if next_review < now:
         return "overdue"
 
-    if row.next_review_at.date() == now.date():
+    if next_review.date() == now.date():
         return "due_now"
 
     return "scheduled"

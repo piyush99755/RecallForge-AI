@@ -23,6 +23,7 @@ from app.api.schemas.documents import (
     RetryDocumentVersionResponse,
     UploadDocumentResponse,
 )
+from app.core.auth import forbid_in_demo_mode
 from app.db.models import Chunk, Document, DocumentVersion, Project, Section
 from app.db.session import get_db
 from app.ingestion.checksum import calculate_sha256
@@ -107,6 +108,8 @@ async def upload_document(
     project_id: uuid.UUID | None = Form(default=None),
     db: Session = Depends(get_db),
 ):
+    forbid_in_demo_mode("Uploading new PDF documents")
+
     if project_id is not None:
         project = db.get(Project, project_id)
         if project is None:
@@ -215,6 +218,8 @@ def parse_document_version(
     document_version_id: uuid.UUID,
     db: Session = Depends(get_db),
 ):
+    forbid_in_demo_mode("Document version parsing")
+
     document_version = db.get(
         DocumentVersion,
         document_version_id,
@@ -266,6 +271,8 @@ def ingest_document_version(
     document_version_id: uuid.UUID,
     db: Session = Depends(get_db),
 ):
+    forbid_in_demo_mode("Document ingestion mutation")
+
     document_version = db.get(
         DocumentVersion,
         document_version_id,
@@ -297,6 +304,8 @@ def embed_document_version_endpoint(
     force: bool = False,
     db: Session = Depends(get_db),
 ):
+    forbid_in_demo_mode("Document embedding mutation")
+
     document_version = db.get(
         DocumentVersion,
         document_version_id,
@@ -331,6 +340,8 @@ def delete_document(
     document_id: uuid.UUID,
     db: Session = Depends(get_db),
 ) -> DeleteDocumentResponse:
+    forbid_in_demo_mode("Deleting seeded demo documents")
+
     statement = (
         select(Document)
         .options(joinedload(Document.versions))
@@ -391,6 +402,8 @@ def retry_document_version(
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
 ) -> RetryDocumentVersionResponse:
+    forbid_in_demo_mode("Retrying document processing")
+
     document_version = db.get(
         DocumentVersion,
         document_version_id,

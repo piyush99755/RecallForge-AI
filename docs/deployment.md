@@ -137,3 +137,43 @@ alembic upgrade head
    - Delete the disposable document from **Library** and confirm both the DB rows and the Supabase Storage object are removed.
 6. **Forget Device:**
    - Click **Forget Device** in the top bar $\rightarrow$ confirm the app immediately returns to the access prompt.
+
+---
+
+## 7. Public Employer Demo Mode Deployment (`APP_MODE=demo`)
+
+To host a public employer/recruiter demo from your portfolio website without exposing your personal documents, study history, Supabase project, or `API_ACCESS_TOKEN`, deploy a separate **Demo Stack**:
+
+### 7.1 Demo Supabase Project & Seeding
+1. Create a **separate** Supabase project (e.g., `recallforge-demo`) and enable the `vector` extension (`CREATE EXTENSION IF NOT EXISTS vector;`).
+2. Run Alembic migrations against the demo `DATABASE_URL`:
+   ```bash
+   cd apps/api
+   alembic upgrade head
+   ```
+3. Seed (or safely reset and re-seed) the demo database with the 5 curated computer science & AI engineering study guides, Gemini embeddings, concept mastery tiers, review queue, and knowledge gaps:
+   ```bash
+   # Initial idempotent seed:
+   APP_MODE=demo python -m app.db.seed_demo
+
+   # Restore canonical demo state (deletes only the demo project and re-seeds):
+   APP_MODE=demo DEMO_RESET_ALLOWED=true python -m app.db.seed_demo --reset
+   ```
+
+### 7.2 Demo FastAPI Service on Render
+1. Create a separate Render Web Service (e.g., `recallforge-demo-api`) pointing to `apps/api`.
+2. Set the following isolated environment variables:
+   - `APP_ENV=production`
+   - `APP_MODE=demo`
+   - `DATABASE_URL=<demo-supabase-session-pooler-url>`
+   - `GEMINI_API_KEY=<gemini-api-key>`
+   - `DEMO_SESSION_SIGNING_SECRET=<dedicated-random-secret>` *(server-side HMAC signing secret; must NOT match your personal `API_ACCESS_TOKEN`)*
+   - `STORAGE_BACKEND=local` *(uploads and deletions are disabled in `APP_MODE=demo`)*
+   - `CORS_ORIGINS=https://your-recallforge-demo.vercel.app`
+
+### 7.3 Demo Next.js Project on Vercel
+1. Create a separate Vercel project (e.g., `recallforge-demo`) pointing to `apps/web`.
+2. Configure **only** these non-secret environment variables:
+   - `NEXT_PUBLIC_API_BASE_URL=https://recallforge-demo-api.onrender.com`
+   - `NEXT_PUBLIC_APP_MODE=demo`
+3. Link your portfolio website's **Live Demo** button directly to `https://your-recallforge-demo.vercel.app` (no credentials or query tokens needed in your portfolio code).

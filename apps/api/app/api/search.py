@@ -1,7 +1,8 @@
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 
+from app.core.demo_protection import enforce_demo_rate_limit
 from app.db.session import get_db
 from app.retrieval.semantic import semantic_search
 from app.retrieval.hybrid import hybrid_search
@@ -66,8 +67,16 @@ class HybridSearchResponse(BaseModel):
 )
 def search_semantic(
     payload: SemanticSearchRequest,
+    request: Request = None,  # type: ignore[assignment]
     db: Session = Depends(get_db),
 ):
+    enforce_demo_rate_limit(
+        bucket="search",
+        max_requests=20,
+        window_seconds=600,
+        request=request,
+    )
+
     results = semantic_search(
         db=db,
         query=payload.query,
@@ -103,8 +112,16 @@ def search_semantic(
 )
 def search_hybrid(
     payload: SemanticSearchRequest,
+    request: Request = None,  # type: ignore[assignment]
     db: Session = Depends(get_db),
 ):
+    enforce_demo_rate_limit(
+        bucket="search",
+        max_requests=20,
+        window_seconds=600,
+        request=request,
+    )
+
     results = hybrid_search(
         db=db,
         query=payload.query,

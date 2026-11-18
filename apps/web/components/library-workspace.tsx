@@ -2,8 +2,10 @@
 
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
+  getAuthMode,
   getDocuments,
   deleteDocument,
+  isDemoModeActive,
   retryDocumentVersion,
 } from "@/lib/api";
 import { DocumentListItem, UploadDocumentResponse } from "@/lib/types";
@@ -18,6 +20,7 @@ export function LibraryWorkspace() {
   const [isLoadingDocuments, setIsLoadingDocuments] = useState(true);
   const [isError, setIsError] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [isDemoMode, setIsDemoMode] = useState(isDemoModeActive());
 
   // Active temporary upload result state
   const [activeUpload, setActiveUpload] =
@@ -117,6 +120,11 @@ export function LibraryWorkspace() {
   useEffect(() => {
     isMountedRef.current = true;
     setIsLoadingDocuments(true);
+    getAuthMode().then((mode) => {
+      if (isMountedRef.current) {
+        setIsDemoMode(mode.app_mode === "demo");
+      }
+    });
     fetchDocuments();
 
     return () => {
@@ -435,6 +443,7 @@ export function LibraryWorkspace() {
 
       {/* Upload Component */}
       <DocumentUpload
+        isDemoMode={isDemoMode}
         activeUpload={activeUpload}
         liveStatus={liveUploadStatus}
         onUploadStart={handleResetUpload}
@@ -449,8 +458,8 @@ export function LibraryWorkspace() {
         isError={isError}
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
-        onDeleteDocument={handleDeleteDocument}
-        onRetryDocument={handleRetryDocument}
+        onDeleteDocument={isDemoMode ? undefined : handleDeleteDocument}
+        onRetryDocument={isDemoMode ? undefined : handleRetryDocument}
         deletingDocumentId={deletingDocumentId}
         retryingVersionId={retryingVersionId}
       />

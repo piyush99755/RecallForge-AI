@@ -6,13 +6,16 @@ import { clearStoredAccessToken } from "@/lib/api";
 import { ThemeToggle } from "./theme-toggle";
 
 interface TopbarProps {
+  isDemoMode?: boolean;
   onToggleSidebar: () => void;
 }
 
-export function Topbar({ onToggleSidebar }: TopbarProps) {
+export function Topbar({ isDemoMode = false, onToggleSidebar }: TopbarProps) {
   const handleForgetDevice = () => {
     clearStoredAccessToken(
-      "Device access cleared. Enter your token to sign back in."
+      isDemoMode
+        ? "Exited Public Demo session. Click 'Enter Live Demo' anytime to resume."
+        : "Device access cleared. Enter your token to sign back in."
     );
   };
 
@@ -62,6 +65,16 @@ export function Topbar({ onToggleSidebar }: TopbarProps) {
 
         {/* Topbar Right Slot */}
         <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+          {isDemoMode && (
+            <div
+              className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-700 dark:text-amber-300 text-xs font-bold"
+              title="Isolated Public Employer Demo Mode — Pre-seeded study vault"
+            >
+              <Sparkles className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+              <span>Demo Mode</span>
+            </div>
+          )}
+
           <div className="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-700 dark:text-emerald-400 text-xs font-medium">
             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
             <span className="hidden sm:inline">Study Engine Ready</span>
@@ -79,12 +92,18 @@ export function Topbar({ onToggleSidebar }: TopbarProps) {
           <button
             type="button"
             onClick={handleForgetDevice}
-            title="Clear stored personal access token on this device"
-            aria-label="Forget device"
+            title={
+              isDemoMode
+                ? "Exit demo session"
+                : "Clear stored personal access token on this device"
+            }
+            aria-label={isDemoMode ? "Exit Demo" : "Forget device"}
             className="inline-flex items-center gap-1.5 text-xs font-semibold p-2 sm:px-2.5 sm:py-1.5 rounded-xl border border-border bg-card text-muted-foreground hover:text-foreground hover:bg-muted transition-colors cursor-pointer"
           >
             <LogOut className="w-3.5 h-3.5" aria-hidden="true" />
-            <span className="hidden sm:inline">Forget Device</span>
+            <span className="hidden sm:inline">
+              {isDemoMode ? "Exit Demo" : "Forget Device"}
+            </span>
           </button>
 
           <ThemeToggle />

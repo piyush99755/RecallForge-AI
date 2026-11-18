@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useRef } from "react";
+import Link from "next/link";
 import { uploadDocument } from "@/lib/api";
 import { UploadDocumentResponse } from "@/lib/types";
 import {
@@ -11,9 +12,14 @@ import {
   CheckCircle2,
   Loader2,
   RefreshCw,
+  Sparkles,
+  ShieldCheck,
+  RotateCw,
+  Trophy,
 } from "lucide-react";
 
 interface DocumentUploadProps {
+  isDemoMode?: boolean;
   activeUpload: UploadDocumentResponse | null;
   liveStatus?: string | null;
   onUploadStart?: () => void;
@@ -22,6 +28,7 @@ interface DocumentUploadProps {
 }
 
 export function DocumentUpload({
+  isDemoMode = false,
   activeUpload,
   liveStatus,
   onUploadStart,
@@ -37,6 +44,60 @@ export function DocumentUpload({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  if (isDemoMode) {
+    return (
+      <div className="rounded-2xl bg-card border border-border p-4 sm:p-6 shadow-cockpit space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-border/60 pb-4">
+          <div>
+            <h3 className="text-lg font-bold text-foreground flex items-center gap-2">
+              <ShieldCheck className="w-5 h-5 text-emerald-500" />
+              <span>Pre-Seeded Technical Study Vault</span>
+            </h3>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Curated computer science &amp; AI engineering study guides pre-ingested and vector-indexed for live testing
+            </p>
+          </div>
+
+          <span className="self-start sm:self-auto inline-flex items-center gap-1.5 text-xs font-bold px-2.5 py-1 rounded-full bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30">
+            <Sparkles className="w-3.5 h-3.5" />
+            <span>Demo Mode • Read-Only Vault</span>
+          </span>
+        </div>
+
+        <p className="text-xs text-muted-foreground leading-relaxed">
+          To keep this shared public demo fast and consistent for all visitors,
+          custom PDF uploads and document deletions are disabled. All 5 technical
+          documents below are fully chunked and embedded—try querying or testing
+          yourself on them directly:
+        </p>
+
+        <div className="flex flex-wrap items-center gap-2.5 pt-1">
+          <Link
+            href="/ask"
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-primary text-primary-foreground text-xs font-semibold hover:bg-primary-hover transition-colors shadow-xs"
+          >
+            <Sparkles className="w-3.5 h-3.5" />
+            <span>Ask Grounded Questions</span>
+          </Link>
+          <Link
+            href="/review"
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-border bg-muted/50 hover:bg-muted text-foreground text-xs font-semibold transition-colors"
+          >
+            <RotateCw className="w-3.5 h-3.5 text-amber-500" />
+            <span>Run Spaced Review</span>
+          </Link>
+          <Link
+            href="/challenges"
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-border bg-muted/50 hover:bg-muted text-foreground text-xs font-semibold transition-colors"
+          >
+            <Trophy className="w-3.5 h-3.5 text-emerald-500" />
+            <span>Generate AI Challenge</span>
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   const effectiveStatus = (
     liveStatus ||

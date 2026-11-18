@@ -1,11 +1,14 @@
 import {
+  AppMode,
   AskRequest,
   AskResponse,
+  AuthModeResponse,
   ChallengeEvaluationRequest,
   ChallengeEvaluationResponse,
   ChallengeRequest,
   ChallengeResponse,
   DeleteDocumentResponse,
+  DemoSessionResponse,
   DocumentListResponse,
   KnowledgeGapResponse,
   LearningProgressResponse,
@@ -17,7 +20,33 @@ import {
 } from "./types";
 
 export const ACCESS_TOKEN_STORAGE_KEY = "recallforge_access_token";
+export const DEMO_ACCESS_TOKEN_STORAGE_KEY = "recallforge_demo_access_token";
 export const AUTH_STATE_CHANGE_EVENT = "recallforge:auth-change";
+
+const ENV_APP_MODE: AppMode =
+  process.env.NEXT_PUBLIC_APP_MODE?.trim().toLowerCase() === "demo"
+    ? "demo"
+    : "personal";
+
+let runtimeAppMode: AppMode = ENV_APP_MODE;
+
+export function getActiveAppMode(): AppMode {
+  return runtimeAppMode;
+}
+
+export function setActiveAppMode(mode: AppMode): void {
+  runtimeAppMode = mode === "demo" ? "demo" : "personal";
+}
+
+export function isDemoModeActive(): boolean {
+  return runtimeAppMode === "demo";
+}
+
+function getStorageKeyForCurrentMode(): string {
+  return runtimeAppMode === "demo"
+    ? DEMO_ACCESS_TOKEN_STORAGE_KEY
+    : ACCESS_TOKEN_STORAGE_KEY;
+}
 
 export class ApiError extends Error {
   status: number;
@@ -51,13 +80,44 @@ export function resolveApiBaseUrl(): string {
   return "http://127.0.0.1:8001";
 }
 
+export const DEMO_SESSION_EXPIRED_MESSAGE =
+  "Demo session expired — start a new session.";
+
+function isDemoTokenExpired(token: string): boolean {
+  const parts = token.trim().split(".");
+  if (parts.length !== 3 || parts[0] !== "rfdemo") {
+    return true;
+  }
+  try {
+    const b64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+    const padded = b64 + "=".repeat((4 - (b64.length % 4)) % 4);
+    const jsonStr = window.atob(padded);
+    const claims = JSON.parse(jsonStr) as { exp?: number; mode?: string };
+    if (claims.mode !== "demo" || typeof claims.exp !== "number") {
+      return true;
+    }
+    return Date.now() >= claims.exp * 1000;
+  } catch {
+    return true;
+  }
+}
+
 export function getStoredAccessToken(): string | null {
   if (typeof window === "undefined") {
     return null;
   }
   try {
-    const token = window.localStorage.getItem(ACCESS_TOKEN_STORAGE_KEY);
-    return token && token.trim() ? token.trim() : null;
+    const key = getStorageKeyForCurrentMode();
+    const token = window.localStorage.getItem(key);
+    const cleaned = token && token.trim() ? token.trim() : null;
+    if (!cleaned) {
+      return null;
+    }
+    if (runtimeAppMode === "demo" && isDemoTokenExpired(cleaned)) {
+      window.localStorage.removeItem(key);
+      return null;
+    }
+    return cleaned;
   } catch {
     return null;
   }
@@ -71,10 +131,10 @@ export function setStoredAccessToken(token: string): void {
   if (!cleaned) {
     return;
   }
-  window.localStorage.setItem(ACCESS_TOKEN_STORAGE_KEY, cleaned);
+  window.localStorage.setItem(getStorageKeyForCurrentMode(), cleaned);
   window.dispatchEvent(
     new CustomEvent(AUTH_STATE_CHANGE_EVENT, {
-      detail: { authenticated: true },
+      detail: { authenticated: true, appMode: runtimeAppMode },
     })
   );
 }
@@ -83,10 +143,10 @@ export function clearStoredAccessToken(reason?: string): void {
   if (typeof window === "undefined") {
     return;
   }
-  window.localStorage.removeItem(ACCESS_TOKEN_STORAGE_KEY);
+  window.localStorage.removeItem(getStorageKeyForCurrentMode());
   window.dispatchEvent(
     new CustomEvent(AUTH_STATE_CHANGE_EVENT, {
-      detail: { authenticated: false, reason },
+      detail: { authenticated: false, reason, appMode: runtimeAppMode },
     })
   );
 }
@@ -122,7 +182,25 @@ async function apiFetch(
     headers.set("Accept", "application/json");
   }
 
-  const token = customToken !== undefined ? customToken.trim() : getStoredAccessToken();
+  let token: string | null = null;
+  if (customToken !== undefined) {
+    token = customToken.trim();
+  } else {
+    const rawStored =
+      typeof window !== "undefined"
+        ? window.localStorage.getItem(getStorageKeyForCurrentMode())
+        : null;
+    if (
+      runtimeAppMode === "demo" &&
+      rawStored &&
+      isDemoTokenExpired(rawStored)
+    ) {
+      clearStoredAccessToken(DEMO_SESSION_EXPIRED_MESSAGE);
+      throw new ApiError(DEMO_SESSION_EXPIRED_MESSAGE, 401);
+    }
+    token = getStoredAccessToken();
+  }
+
   if (token) {
     headers.set("Authorization", `Bearer ${token}`);
   }
@@ -134,20 +212,75 @@ async function apiFetch(
 
   if (response.status === 401 && customToken === undefined) {
     const detail = await parseErrorDetail(response);
-    clearStoredAccessToken(detail);
-    throw new ApiError(detail, 401);
+    const friendlyReason =
+      runtimeAppMode === "demo" ? DEMO_SESSION_EXPIRED_MESSAGE : detail;
+    clearStoredAccessToken(friendlyReason);
+    throw new ApiError(friendlyReason, 401);
   }
 
   return response;
 }
 
 /**
- * Verifies a personal access token against GET /auth/verify before persisting.
+ * Fetches the backend's current operating mode (personal vs demo).
+ */
+export async function getAuthMode(): Promise<AuthModeResponse> {
+  try {
+    const baseUrl = resolveApiBaseUrl();
+    const response = await fetch(`${baseUrl}/auth/mode`, {
+      cache: "no-store",
+      headers: { Accept: "application/json" },
+    });
+    if (!response.ok) {
+      return {
+        app_mode: ENV_APP_MODE,
+        demo_enabled: ENV_APP_MODE === "demo",
+        uploads_enabled: ENV_APP_MODE !== "demo",
+        deletions_enabled: ENV_APP_MODE !== "demo",
+      };
+    }
+    const data: AuthModeResponse = await response.json();
+    setActiveAppMode(data.app_mode);
+    return data;
+  } catch {
+    return {
+      app_mode: ENV_APP_MODE,
+      demo_enabled: ENV_APP_MODE === "demo",
+      uploads_enabled: ENV_APP_MODE !== "demo",
+      deletions_enabled: ENV_APP_MODE !== "demo",
+    };
+  }
+}
+
+/**
+ * Requests a demo session token from POST /auth/demo-session (available only when backend APP_MODE='demo').
+ */
+export async function startDemoSession(): Promise<DemoSessionResponse> {
+  const baseUrl = resolveApiBaseUrl();
+  const response = await fetch(`${baseUrl}/auth/demo-session`, {
+    method: "POST",
+    cache: "no-store",
+    headers: { Accept: "application/json" },
+  });
+
+  if (!response.ok) {
+    const detail = await parseErrorDetail(response);
+    throw new ApiError(detail, response.status);
+  }
+
+  const data: DemoSessionResponse = await response.json();
+  setActiveAppMode("demo");
+  setStoredAccessToken(data.access_token);
+  return data;
+}
+
+/**
+ * Verifies a personal or demo access token against GET /auth/verify before persisting.
  */
 export async function verifyAccessToken(token: string): Promise<boolean> {
   const cleaned = token.trim();
   if (!cleaned) {
-    throw new ApiError("Please enter a personal access token.", 400);
+    throw new ApiError("Please enter an access token.", 400);
   }
 
   const response = await apiFetch(

@@ -212,3 +212,20 @@ export interface ChallengeEvaluationResponse {
   average_score: number;
   mastery_level: MasteryLevel | string;
 }
+
+export type AppMode = "personal" | "demo";
+
+export interface AuthModeResponse {
+  app_mode: AppMode;
+  demo_enabled: boolean;
+  uploads_enabled: boolean;
+  deletions_enabled: boolean;
+}
+
+export interface DemoSessionResponse {
+  authenticated: boolean;
+  app_mode: AppMode;
+  access_token: string;
+  expires_at?: number;
+  expires_in?: number;
+}

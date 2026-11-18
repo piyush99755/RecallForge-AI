@@ -1,9 +1,10 @@
 from uuid import UUID
 import re
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
+from app.core.demo_protection import enforce_demo_rate_limit
 from app.db.session import get_db
 from app.rag.answer import generate_grounded_answer
 from app.rag.context import build_rag_context
@@ -49,8 +50,16 @@ class AskResponse(BaseModel):
 )
 def ask_recallforge(
     payload: AskRequest,
+    request: Request = None,  # type: ignore[assignment]
     db: Session = Depends(get_db),
 ):
+    enforce_demo_rate_limit(
+        bucket="ask",
+        max_requests=12,
+        window_seconds=600,
+        request=request,
+    )
+
     candidates = hybrid_search(
         db=db,
         query=payload.query,

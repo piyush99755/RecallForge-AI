@@ -2,7 +2,7 @@ import logging
 from datetime import datetime, timezone
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -12,6 +12,12 @@ logger = logging.getLogger(__name__)
 from app.api.challenge import (
     ChallengeResponse,
     ChallengeSourceResponse,
+)
+from app.core.config import get_settings
+from app.core.demo_protection import (
+    enforce_demo_rate_limit,
+    require_active_demo_session_jti,
+    store_ephemeral_demo_challenge,
 )
 from app.db.models import (
     ChallengeAttempt,
@@ -336,8 +342,19 @@ def get_learning_gaps(
 )
 def review_next_concept(
     payload: ReviewNextRequest,
+    request: Request = None,  # type: ignore[assignment]
     db: Session = Depends(get_db),
 ) -> ChallengeResponse:
+    is_demo = get_settings().is_demo_mode
+    owner_jti = require_active_demo_session_jti(request) if is_demo else ""
+
+    enforce_demo_rate_limit(
+        bucket="review_next",
+        max_requests=8,
+        window_seconds=600,
+        request=request,
+    )
+
     targets = build_review_targets(
         db=db,
         project_id=payload.project_id,
@@ -465,6 +482,37 @@ def review_next_concept(
             )
             continue
 
+        sources_response = [
+            ChallengeSourceResponse(
+                source_id=source.source_id,
+                chunk_id=source.chunk_id,
+                document_title=source.document_title,
+                section_title=source.section_title,
+                page_start=source.page_start,
+                page_end=source.page_end,
+            )
+            for source in context.sources
+        ]
+
+        if is_demo:
+            ephemeral = store_ephemeral_demo_challenge(
+                owner_jti=owner_jti,
+                project_id=progress.project_id,
+                document_id=progress.document_id,
+                topic=progress.topic,
+                concept=challenge.concept,
+                question=challenge.question,
+                expected_answer=challenge.expected_answer,
+                explanation=challenge.explanation,
+            )
+            return ChallengeResponse(
+                challenge_id=ephemeral.id,
+                topic=ephemeral.topic,
+                concept=ephemeral.concept,
+                question=ephemeral.question,
+                sources=sources_response,
+            )
+
         stored_challenge = StudyChallenge(
             project_id=progress.project_id,
             document_id=progress.document_id,
@@ -488,17 +536,7 @@ def review_next_concept(
             topic=stored_challenge.topic,
             concept=stored_challenge.concept,
             question=stored_challenge.question,
-            sources=[
-                ChallengeSourceResponse(
-                    source_id=source.source_id,
-                    chunk_id=source.chunk_id,
-                    document_title=source.document_title,
-                    section_title=source.section_title,
-                    page_start=source.page_start,
-                    page_end=source.page_end,
-                )
-                for source in context.sources
-            ],
+            sources=sources_response,
         )
 
     raise HTTPException(

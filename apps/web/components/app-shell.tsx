@@ -3,7 +3,9 @@
 import React, { useEffect, useState } from "react";
 import {
   AUTH_STATE_CHANGE_EVENT,
+  getAuthMode,
   getStoredAccessToken,
+  isDemoModeActive,
 } from "@/lib/api";
 import { AccessGate } from "./access-gate";
 import { MobileBottomNav } from "./mobile-nav";
@@ -18,17 +20,30 @@ export function AppShell({ children }: AppShellProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isHydrated, setIsHydrated] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isDemoMode, setIsDemoMode] = useState(isDemoModeActive());
   const [authReason, setAuthReason] = useState<string | null>(null);
 
   useEffect(() => {
-    setIsAuthenticated(Boolean(getStoredAccessToken()));
-    setIsHydrated(true);
+    let active = true;
+
+    const initAuth = async () => {
+      const modeInfo = await getAuthMode();
+      if (!active) return;
+      const demoActive = modeInfo.app_mode === "demo";
+      setIsDemoMode(demoActive);
+      setIsAuthenticated(Boolean(getStoredAccessToken()));
+      setIsHydrated(true);
+    };
+
+    initAuth();
 
     const handleAuthChange = (event: Event) => {
       const customEvent = event as CustomEvent<{
         authenticated?: boolean;
         reason?: string;
+        appMode?: string;
       }>;
+      setIsDemoMode(isDemoModeActive());
       const hasToken = Boolean(getStoredAccessToken());
       setIsAuthenticated(hasToken);
       if (!hasToken && customEvent.detail?.reason) {
@@ -40,6 +55,7 @@ export function AppShell({ children }: AppShellProps) {
 
     window.addEventListener(AUTH_STATE_CHANGE_EVENT, handleAuthChange);
     return () => {
+      active = false;
       window.removeEventListener(AUTH_STATE_CHANGE_EVENT, handleAuthChange);
     };
   }, []);
@@ -55,9 +71,11 @@ export function AppShell({ children }: AppShellProps) {
   if (!isAuthenticated) {
     return (
       <AccessGate
+        isDemoMode={isDemoMode}
         initialReason={authReason}
         onAuthenticated={() => {
           setAuthReason(null);
+          setIsDemoMode(isDemoModeActive());
           setIsAuthenticated(true);
         }}
       />
@@ -69,7 +87,10 @@ export function AppShell({ children }: AppShellProps) {
       <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 
       <div className="flex-1 flex flex-col min-w-0 min-h-dvh">
-        <Topbar onToggleSidebar={() => setSidebarOpen(true)} />
+        <Topbar
+          isDemoMode={isDemoMode}
+          onToggleSidebar={() => setSidebarOpen(true)}
+        />
 
         <main className="flex-1 pt-4 pb-[calc(5.25rem+env(safe-area-inset-bottom))] pl-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))] sm:p-6 sm:pb-[calc(5.5rem+env(safe-area-inset-bottom))] lg:p-8 max-w-7xl w-full mx-auto">
           {children}
